@@ -1,0 +1,529 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ IDENTITY & AUTH ============
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+  SUSPENDED
+  DELETED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  role          UserRole  @default(USER)
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  wallet        Wallet?
+  orders        Order[]
+  sessions      Session[]
+  walletTransactions WalletTransaction[]
+  auditLogs     AuditLog[]
+
+  @@index([email])
+  @@index([username])
+  @@index([status])
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============ WALLET & TRANSACTIONS ============
+
+enum WalletTransactionType {
+  DEPOSIT
+  PURCHASE
+  REFUND
+  ADJUSTMENT
+  RESERVATION
+  CAPTURE
+  RELEASE
+}
+
+enum WalletTransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  CANCELLED
+}
+
+model Wallet {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  balance         Decimal   @default(0) @db.Numeric(19, 2)
+  reservedBalance Decimal   @default(0) @db.Numeric(19, 2)
+  totalDeposits   Decimal   @default(0) @db.Numeric(19, 2)
+  totalSpent      Decimal   @default(0) @db.Numeric(19, 2)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    WalletTransaction[]
+  reservations    WalletReservation[]
+
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id                String    @id @default(cuid())
+  walletId          String
+  userId            String
+  transactionType   WalletTransactionType
+  amount            Decimal   @db.Numeric(19, 2)
+  balanceBefore     Decimal   @db.Numeric(19, 2)
+  balanceAfter      Decimal   @db.Numeric(19, 2)
+  referenceId       String?
+  idempotencyKey    String?   @unique
+  status            WalletTransactionStatus @default(PENDING)
+  description       String?
+  createdAt         DateTime  @default(now())
+
+  wallet            Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model WalletReservation {
+  id          String    @id @default(cuid())
+  walletId    String
+  orderId     String
+  amount      Decimal   @db.Numeric(19, 2)
+  status      String    @default("RESERVED")
+  reservedAt  DateTime  @default(now())
+  releasedAt  DateTime?
+
+  wallet      Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+  @@index([orderId])
+}
+
+// ============ SUPPLIERS & BALANCE ============
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model Supplier {
+  id                  String    @id @default(cuid())
+  name                String    @unique
+  baseUrl             String
+  apiKey              String
+  status              SupplierStatus @default(ACTIVE)
+  webhookSecret       String?
+  lastSyncAt          DateTime?
+  lastSyncError       String?
+  connectionStatus    String    @default("UNKNOWN")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  balance             SupplierBalance?
+  products            SupplierProduct[]
+  balanceLogs         SupplierBalanceLog[]
+  transactions        SupplierTransaction[]
+  syncLogs            SupplierSyncLog[]
+  syncSettings        SupplierSyncSettings?
+  apiLogs             SupplierApiLog[]
+
+  @@index([status])
+  @@index([name])
+}
+
+model SupplierBalance {
+  id                String    @id @default(cuid())
+  supplierId        String    @unique
+  balance           Decimal   @db.Numeric(19, 2)
+  balanceType       String    @default("ESTIMATED")
+  totalTopUps       Decimal   @default(0) @db.Numeric(19, 2)
+  totalSpent        Decimal   @default(0) @db.Numeric(19, 2)
+  alertThreshold    Decimal   @default(0) @db.Numeric(19, 2)
+  minimumTopUp      Decimal   @default(0) @db.Numeric(19, 2)
+  lastUpdatedAt     DateTime  @default(now())
+  lastVerifiedAt    DateTime?
+
+  supplier          Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+}
+
+model SupplierBalanceLog {
+  id                String    @id @default(cuid())
+  supplierId        String
+  balanceBefore     Decimal   @db.Numeric(19, 2)
+  balanceAfter      Decimal   @db.Numeric(19, 2)
+  amount            Decimal   @db.Numeric(19, 2)
+  transactionType   String
+  referenceId       String?
+  createdAt         DateTime  @default(now())
+
+  supplier          Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([createdAt])
+}
+
+model SupplierTransaction {
+  id                  String    @id @default(cuid())
+  supplierId          String
+  supplierTransId     String    @unique
+  orderId             String?
+  amount              Decimal   @db.Numeric(19, 2)
+  status              String    @default("PENDING")
+  requestData         String?   @db.Text
+  responseData        String?   @db.Text
+  errorMessage        String?
+  createdAt           DateTime  @default(now())
+  completedAt         DateTime?
+
+  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([supplierTransId])
+  @@index([status])
+}
+
+model SupplierSyncSettings {
+  id                  String    @id @default(cuid())
+  supplierId          String    @unique
+  syncInterval        Int       @default(300)
+  isAutoSyncEnabled   Boolean   @default(true)
+  lastWebhookReceivedAt DateTime?
+
+  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+}
+
+model SupplierSyncLog {
+  id                  String    @id @default(cuid())
+  supplierId          String
+  totalProducts       Int       @default(0)
+  newProducts         Int       @default(0)
+  updatedProducts     Int       @default(0)
+  failedProducts      Int       @default(0)
+  status              String    @default("PENDING")
+  error               String?
+  syncedAt            DateTime  @default(now())
+
+  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([syncedAt])
+}
+
+model SupplierApiLog {
+  id                  String    @id @default(cuid())
+  supplierId          String
+  method              String
+  endpoint            String
+  statusCode          Int?
+  requestData         String?   @db.Text
+  responseData        String?   @db.Text
+  errorMessage        String?
+  responseTimeMs      Int?
+  createdAt           DateTime  @default(now())
+
+  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([createdAt])
+}
+
+// ============ CATEGORIES & PRODUCTS ============
+
+model Category {
+  id                String    @id @default(cuid())
+  name              String
+  slug              String    @unique
+  description       String?
+  status            String    @default("ACTIVE")
+  createdAt         DateTime  @default(now())
+
+  products          Product[]
+  supplierProducts  SupplierProduct[]
+
+  @@index([slug])
+}
+
+model SupplierProduct {
+  id                  String    @id @default(cuid())
+  supplierId          String
+  supplierProductId   String
+  categoryId          String?
+  name                String
+  description         String?
+  image               String?
+  supplierCost        Decimal   @db.Numeric(19, 2)
+  stock               Int?
+  status              String    @default("ACTIVE")
+  rawData             String?   @db.Text
+  lastSyncedAt        DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  category            Category? @relation(fields: [categoryId], references: [id])
+  mappings            ProductSupplierMapping[]
+
+  @@unique([supplierId, supplierProductId])
+  @@index([supplierId])
+  @@index([status])
+}
+
+model Product {
+  id                String    @id @default(cuid())
+  name              String
+  slug              String    @unique
+  description       String?
+  image             String?
+  categoryId        String?
+  sellingPrice      Decimal   @db.Numeric(19, 2)
+  profitType        String    @default("PERCENTAGE")
+  profitValue       Decimal   @db.Numeric(10, 2)
+  pricingMode       String    @default("AUTO")
+  status            String    @default("ACTIVE")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  category          Category? @relation(fields: [categoryId], references: [id])
+  mappings          ProductSupplierMapping[]
+  orders            Order[]
+  priceHistories    ProductPriceHistory[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model ProductSupplierMapping {
+  id                String    @id @default(cuid())
+  productId         String
+  supplierProductId String
+  supplierId        String
+  priority          Int       @default(0)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplierProduct   SupplierProduct @relation(fields: [supplierProductId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+  @@index([productId])
+  @@index([supplierId])
+}
+
+model ProductPriceHistory {
+  id                String    @id @default(cuid())
+  productId         String
+  supplierId        String?
+  supplierCost      Decimal   @db.Numeric(19, 2)
+  sellingPrice      Decimal   @db.Numeric(19, 2)
+  profitRate        Decimal   @db.Numeric(10, 2)
+  recordedAt        DateTime  @default(now())
+
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([recordedAt])
+}
+
+// ============ ORDERS ============
+
+enum OrderStatus {
+  PENDING
+  RESERVED
+  PROCESSING
+  SUPPLIER_PENDING
+  RECONCILIATION
+  SUCCESS
+  FAILED
+  REFUND_PENDING
+  REFUNDED
+}
+
+model Order {
+  id                    String    @id @default(cuid())
+  userId                String
+  productId             String
+  supplierId            String
+  quantity              Int
+  supplierCost          Decimal   @db.Numeric(19, 2)
+  sellingPrice          Decimal   @db.Numeric(19, 2)
+  totalAmount           Decimal   @db.Numeric(19, 2)
+  profit                Decimal   @db.Numeric(19, 2)
+  supplierTransactionId String?
+  status                OrderStatus @default(PENDING)
+  errorDetails          String?
+  idempotencyKey        String?   @unique
+  createdAt             DateTime  @default(now())
+  completedAt           DateTime?
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product               Product   @relation(fields: [productId], references: [id])
+  credentials           OrderCredentials?
+  statusHistories       OrderStatusHistory[]
+  reservation           WalletReservation?
+
+  @@index([userId])
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderCredentials {
+  id                String    @id @default(cuid())
+  orderId           String    @unique
+  accountData       String    @db.Text
+  encryptionMethod  String    @default("AES256")
+  createdAt         DateTime  @default(now())
+
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderStatusHistory {
+  id                String    @id @default(cuid())
+  orderId           String
+  statusFrom        OrderStatus?
+  statusTo          OrderStatus
+  reason            String?
+  changedAt         DateTime  @default(now())
+
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// ============ PAYMENTS ============
+
+model PaymentTransaction {
+  id                String    @id @default(cuid())
+  walletId          String
+  amount            Decimal   @db.Numeric(19, 2)
+  transactionCode   String?   @unique
+  status            String    @default("PENDING")
+  paymentMethod     String    @default("VIETQR")
+  gatewayResponse   String?   @db.Text
+  idempotencyKey    String?   @unique
+  createdAt         DateTime  @default(now())
+  verifiedAt        DateTime?
+
+  @@index([walletId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PaymentWebhook {
+  id                String    @id @default(cuid())
+  gatewayName       String
+  webhookId         String    @unique
+  transactionId     String
+  payload           String    @db.Text
+  signature         String
+  processed         Boolean   @default(false)
+  processedAt       DateTime?
+  status            String    @default("PENDING")
+  createdAt         DateTime  @default(now())
+
+  @@index([webhookId])
+  @@index([status])
+  @@index([processed])
+}
+
+// ============ SYSTEM & AUDIT ============
+
+model SystemSettings {
+  id                String    @id @default(cuid())
+  settingKey        String    @unique
+  settingValue      String    @db.Text
+  updatedAt         DateTime  @updatedAt
+
+  @@index([settingKey])
+}
+
+model EmailNotification {
+  id                String    @id @default(cuid())
+  supplierId        String?
+  email             String
+  notificationType  String
+  sent              Boolean   @default(false)
+  sentAt            DateTime?
+  status            String    @default("PENDING")
+  errorMessage      String?
+  createdAt         DateTime  @default(now())
+
+  @@index([email])
+  @@index([sentAt])
+}
+
+model NotificationSettings {
+  id                String    @id @default(cuid())
+  settingKey        String    @unique
+  settingValue      String    @db.Text
+
+  @@index([settingKey])
+}
+
+model AuditLog {
+  id                String    @id @default(cuid())
+  userId            String?
+  action            String
+  entityType        String
+  entityId          String?
+  changes           String?   @db.Text
+  ipAddress         String?
+  createdAt         DateTime  @default(now())
+
+  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+// ============ IDEMPOTENCY ============
+
+model IdempotencyRecord {
+  id                String    @id @default(cuid())
+  idempotencyKey    String    @unique
+  endpoint          String
+  requestHash       String
+  response          String    @db.Text
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+
+  @@index([idempotencyKey])
+  @@index([expiresAt])
+}

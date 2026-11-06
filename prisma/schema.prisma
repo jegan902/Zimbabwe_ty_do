@@ -4,10 +4,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
-// ============ IDENTITY & AUTH ============
+// ============================================================================
+// IDENTITY & AUTH
+// ============================================================================
 
 enum UserRole {
   USER
@@ -23,40 +24,74 @@ enum UserStatus {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  username      String    @unique
-  passwordHash  String
-  role          UserRole  @default(USER)
-  status        UserStatus @default(ACTIVE)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String     @id @default(cuid())
+  email            String     @unique
+  username         String     @unique
+  passwordHash     String
+  fullName         String?
+  phone            String?
+  avatar           String?
+  role             UserRole   @default(USER)
+  status           UserStatus @default(ACTIVE)
+  emailVerifiedAt  DateTime?
+  failedLoginCount Int        @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  wallet        Wallet?
-  orders        Order[]
-  sessions      Session[]
+  wallet             Wallet?
+  orders             Order[]
+  sessions           Session[]
   walletTransactions WalletTransaction[]
-  auditLogs     AuditLog[]
+  passwordResets     PasswordResetToken[]
+  auditLogs          AuditLog[]
+  paymentTxns        PaymentTransaction[]
 
   @@index([email])
   @@index([username])
   @@index([status])
+  @@index([role])
+  @@index([createdAt])
 }
 
 model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  // HMAC-SHA256 of the opaque session token. The raw token only lives in the httpOnly cookie.
+  token      String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @default(now())
+  revokedAt  DateTime?
+  ipAddress  String?
+  userAgent  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model PasswordResetToken {
   id        String    @id @default(cuid())
   userId    String
-  token     String    @unique
+  // HMAC of the token delivered by email; the raw value is never stored.
+  tokenHash String    @unique
   expiresAt DateTime
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
 }
 
-// ============ WALLET & TRANSACTIONS ============
+// ============================================================================
+// CUSTOMER WALLET (obligation owed to customers)
+// ============================================================================
 
 enum WalletTransactionType {
   DEPOSIT
@@ -75,63 +110,81 @@ enum WalletTransactionStatus {
   CANCELLED
 }
 
-model Wallet {
-  id              String    @id @default(cuid())
-  userId          String    @unique
-  balance         Decimal   @default(0) @db.Numeric(19, 2)
-  reservedBalance Decimal   @default(0) @db.Numeric(19, 2)
-  totalDeposits   Decimal   @default(0) @db.Numeric(19, 2)
-  totalSpent      Decimal   @default(0) @db.Numeric(19, 2)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+enum ReservationStatus {
+  RESERVED
+  CAPTURED
+  RELEASED
+}
 
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions    WalletTransaction[]
-  reservations    WalletReservation[]
+model Wallet {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  // balance = money owned by the customer. reservedBalance is still theirs but
+  // committed to an in-flight order. Available = balance - reservedBalance.
+  balance         Decimal  @default(0) @db.Decimal(19, 2)
+  reservedBalance Decimal  @default(0) @db.Decimal(19, 2)
+  totalDeposits   Decimal  @default(0) @db.Decimal(19, 2)
+  totalSpent      Decimal  @default(0) @db.Decimal(19, 2)
+  totalRefunded   Decimal  @default(0) @db.Decimal(19, 2)
+  currency        String   @default("VND")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions        WalletTransaction[]
+  reservations        WalletReservation[]
+  paymentTransactions PaymentTransaction[]
 
   @@index([userId])
 }
 
 model WalletTransaction {
-  id                String    @id @default(cuid())
-  walletId          String
-  userId            String
-  transactionType   WalletTransactionType
-  amount            Decimal   @db.Numeric(19, 2)
-  balanceBefore     Decimal   @db.Numeric(19, 2)
-  balanceAfter      Decimal   @db.Numeric(19, 2)
-  referenceId       String?
-  idempotencyKey    String?   @unique
-  status            WalletTransactionStatus @default(PENDING)
-  description       String?
-  createdAt         DateTime  @default(now())
+  id              String                  @id @default(cuid())
+  walletId        String
+  userId          String
+  transactionType WalletTransactionType
+  // Always positive. Direction is implied by transactionType + balance deltas.
+  amount          Decimal                 @db.Decimal(19, 2)
+  balanceBefore   Decimal                 @db.Decimal(19, 2)
+  balanceAfter    Decimal                 @db.Decimal(19, 2)
+  reservedBefore  Decimal                 @default(0) @db.Decimal(19, 2)
+  reservedAfter   Decimal                 @default(0) @db.Decimal(19, 2)
+  referenceId     String?
+  idempotencyKey  String?                 @unique
+  status          WalletTransactionStatus @default(PENDING)
+  description     String?
+  createdAt       DateTime                @default(now())
 
-  wallet            Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
   @@index([userId])
   @@index([createdAt])
   @@index([status])
+  @@index([transactionType])
+  @@index([referenceId])
 }
 
 model WalletReservation {
-  id          String    @id @default(cuid())
-  walletId    String
-  orderId     String
-  amount      Decimal   @db.Numeric(19, 2)
-  status      String    @default("RESERVED")
-  reservedAt  DateTime  @default(now())
-  releasedAt  DateTime?
+  id         String            @id @default(cuid())
+  walletId   String
+  orderId    String            @unique
+  amount     Decimal           @db.Decimal(19, 2)
+  status     ReservationStatus @default(RESERVED)
+  reservedAt DateTime          @default(now())
+  settledAt  DateTime?
 
-  wallet      Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([walletId])
-  @@index([orderId])
+  @@index([status])
 }
 
-// ============ SUPPLIERS & BALANCE ============
+// ============================================================================
+// SUPPLIERS (working capital owned by the operator)
+// ============================================================================
 
 enum SupplierStatus {
   ACTIVE
@@ -139,227 +192,377 @@ enum SupplierStatus {
   SUSPENDED
 }
 
+enum BalanceType {
+  ACTUAL
+  ESTIMATED
+  UNRECONCILED
+}
+
 model Supplier {
-  id                  String    @id @default(cuid())
-  name                String    @unique
-  baseUrl             String
-  apiKey              String
-  status              SupplierStatus @default(ACTIVE)
-  webhookSecret       String?
-  lastSyncAt          DateTime?
-  lastSyncError       String?
-  connectionStatus    String    @default("UNKNOWN")
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String         @id @default(cuid())
+  name               String         @unique
+  // Adapter implementation key resolved by the supplier registry, e.g. "quangvinh".
+  adapterKey         String
+  baseUrl            String
+  apiKey             String
+  status             SupplierStatus @default(ACTIVE)
+  webhookSecret      String?
+  isPublic           Boolean        @default(false)
+  priority           Int            @default(100)
+  timeoutMs          Int            @default(30000)
+  supportsBalanceApi Boolean        @default(false)
+  supportsWebhook    Boolean        @default(false)
+  supportsStock      Boolean        @default(false)
+  profitType         ProfitType     @default(PERCENTAGE)
+  profitValue        Decimal        @default(10) @db.Decimal(10, 4)
+  connectionStatus   String         @default("UNKNOWN")
+  connectionError    String?
+  lastCheckedAt      DateTime?
+  lastSyncAt         DateTime?
+  lastSyncError      String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   balance             SupplierBalance?
+  topUps              SupplierTopUp[]
   products            SupplierProduct[]
-  balanceLogs         SupplierBalanceLog[]
   transactions        SupplierTransaction[]
   syncLogs            SupplierSyncLog[]
   syncSettings        SupplierSyncSettings?
   apiLogs             SupplierApiLog[]
+  webhookEvents       SupplierWebhookEvent[]
+  supplierBalanceLogs SupplierBalanceLog[]
 
   @@index([status])
   @@index([name])
+  @@index([adapterKey])
 }
 
 model SupplierBalance {
-  id                String    @id @default(cuid())
-  supplierId        String    @unique
-  balance           Decimal   @db.Numeric(19, 2)
-  balanceType       String    @default("ESTIMATED")
-  totalTopUps       Decimal   @default(0) @db.Numeric(19, 2)
-  totalSpent        Decimal   @default(0) @db.Numeric(19, 2)
-  alertThreshold    Decimal   @default(0) @db.Numeric(19, 2)
-  minimumTopUp      Decimal   @default(0) @db.Numeric(19, 2)
-  lastUpdatedAt     DateTime  @default(now())
-  lastVerifiedAt    DateTime?
+  id                   String      @id @default(cuid())
+  supplierId           String      @unique
+  // Money the operator has confirmed sitting at the supplier.
+  balance              Decimal     @default(0) @db.Decimal(19, 2)
+  balanceType          BalanceType @default(ESTIMATED)
+  // Internal book value derived from confirmed top-ups minus confirmed purchases.
+  estimatedBalance     Decimal     @default(0) @db.Decimal(19, 2)
+  totalTopUps          Decimal     @default(0) @db.Decimal(19, 2)
+  totalSpent           Decimal     @default(0) @db.Decimal(19, 2)
+  alertThreshold       Decimal     @default(0) @db.Decimal(19, 2)
+  minimumTopUp         Decimal     @default(0) @db.Decimal(19, 2)
+  lowBalanceNotifiedAt DateTime?
+  lastUpdatedAt        DateTime    @default(now())
+  lastVerifiedAt       DateTime?
+  updatedBy            String?
 
-  supplier          Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
+  @@index([balanceType])
 }
 
-model SupplierBalanceLog {
-  id                String    @id @default(cuid())
-  supplierId        String
-  balanceBefore     Decimal   @db.Numeric(19, 2)
-  balanceAfter      Decimal   @db.Numeric(19, 2)
-  amount            Decimal   @db.Numeric(19, 2)
-  transactionType   String
-  referenceId       String?
-  createdAt         DateTime  @default(now())
+model SupplierTopUp {
+  id         String   @id @default(cuid())
+  supplierId String
+  amount     Decimal  @db.Decimal(19, 2)
+  reference  String?
+  note       String?
+  createdBy  String?
+  createdAt  DateTime @default(now())
 
-  supplier          Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
   @@index([createdAt])
 }
 
-model SupplierTransaction {
-  id                  String    @id @default(cuid())
-  supplierId          String
-  supplierTransId     String    @unique
-  orderId             String?
-  amount              Decimal   @db.Numeric(19, 2)
-  status              String    @default("PENDING")
-  requestData         String?   @db.Text
-  responseData        String?   @db.Text
-  errorMessage        String?
-  createdAt           DateTime  @default(now())
-  completedAt         DateTime?
+model SupplierBalanceLog {
+  id              String   @id @default(cuid())
+  supplierId      String
+  balanceBefore   Decimal  @db.Decimal(19, 2)
+  balanceAfter    Decimal  @db.Decimal(19, 2)
+  amount          Decimal  @db.Decimal(19, 2)
+  // TOP_UP | PURCHASE | ADJUSTMENT | RECONCILIATION | RELEASE
+  transactionType String
+  referenceId     String?
+  note            String?
+  createdAt       DateTime @default(now())
 
-  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
-  @@index([supplierTransId])
+  @@index([createdAt])
+  @@index([transactionType])
+}
+
+model SupplierTransaction {
+  id              String    @id @default(cuid())
+  supplierId      String
+  supplierTransId String?
+  orderId         String?
+  amount          Decimal   @db.Decimal(19, 2)
+  status          String    @default("PENDING")
+  requestData     String?   @db.Text
+  responseData    String?   @db.Text
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  // A supplier transaction id is unique per supplier, not globally.
+  @@unique([supplierId, supplierTransId])
+  @@index([supplierId])
+  @@index([orderId])
   @@index([status])
 }
 
 model SupplierSyncSettings {
-  id                  String    @id @default(cuid())
-  supplierId          String    @unique
-  syncInterval        Int       @default(300)
-  isAutoSyncEnabled   Boolean   @default(true)
+  id                    String    @id @default(cuid())
+  supplierId            String    @unique
+  // Seconds. Admin-selectable: 60 / 300 / 900 / 1800 / 3600.
+  syncInterval          Int       @default(300)
+  isAutoSyncEnabled     Boolean   @default(true)
+  nextSyncAt            DateTime?
   lastWebhookReceivedAt DateTime?
+  updatedAt             DateTime  @updatedAt
 
-  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
 }
 
 model SupplierSyncLog {
-  id                  String    @id @default(cuid())
-  supplierId          String
-  totalProducts       Int       @default(0)
-  newProducts         Int       @default(0)
-  updatedProducts     Int       @default(0)
-  failedProducts      Int       @default(0)
-  status              String    @default("PENDING")
-  error               String?
-  syncedAt            DateTime  @default(now())
+  id                   String     @id @default(cuid())
+  supplierId           String
+  trigger              String     @default("MANUAL")
+  status               SyncStatus @default(PENDING)
+  totalProducts        Int        @default(0)
+  newProducts          Int        @default(0)
+  updatedProducts      Int        @default(0)
+  priceChangedProducts Int        @default(0)
+  deactivatedProducts  Int        @default(0)
+  failedProducts       Int        @default(0)
+  durationMs           Int?
+  error                String?    @db.Text
+  startedAt            DateTime   @default(now())
+  finishedAt           DateTime?
 
-  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
-  @@index([syncedAt])
+  @@index([startedAt])
+  @@index([status])
 }
 
 model SupplierApiLog {
-  id                  String    @id @default(cuid())
-  supplierId          String
-  method              String
-  endpoint            String
-  statusCode          Int?
-  requestData         String?   @db.Text
-  responseData        String?   @db.Text
-  errorMessage        String?
-  responseTimeMs      Int?
-  createdAt           DateTime  @default(now())
+  id             String   @id @default(cuid())
+  supplierId     String
+  method         String
+  endpoint       String
+  statusCode     Int?
+  success        Boolean  @default(false)
+  requestData    String?  @db.Text
+  responseData   String?  @db.Text
+  errorMessage   String?
+  responseTimeMs Int?
+  createdAt      DateTime @default(now())
 
-  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
   @@index([supplierId])
   @@index([createdAt])
+  @@index([success])
 }
 
-// ============ CATEGORIES & PRODUCTS ============
+model SupplierWebhookEvent {
+  id          String    @id @default(cuid())
+  supplierId  String
+  // Deduplication key supplied by (or derived from) the provider payload.
+  eventKey    String
+  eventType   String?
+  payload     String    @db.Text
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, eventKey])
+  @@index([supplierId])
+  @@index([processed])
+}
+
+// ============================================================================
+// CATALOG
+// ============================================================================
 
 model Category {
-  id                String    @id @default(cuid())
-  name              String
-  slug              String    @unique
-  description       String?
-  status            String    @default("ACTIVE")
-  createdAt         DateTime  @default(now())
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  icon        String?
+  image       String?
+  sortOrder   Int      @default(0)
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  products          Product[]
-  supplierProducts  SupplierProduct[]
+  products         Product[]
+  supplierProducts SupplierProduct[]
 
   @@index([slug])
+  @@index([status])
+  @@index([sortOrder])
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+enum ProfitType {
+  PERCENTAGE
+  FIXED
+}
+
+enum PricingMode {
+  AUTO
+  MANUAL
 }
 
 model SupplierProduct {
-  id                  String    @id @default(cuid())
-  supplierId          String
-  supplierProductId   String
-  categoryId          String?
-  name                String
-  description         String?
-  image               String?
-  supplierCost        Decimal   @db.Numeric(19, 2)
-  stock               Int?
-  status              String    @default("ACTIVE")
-  rawData             String?   @db.Text
-  lastSyncedAt        DateTime  @default(now())
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                   String        @id @default(cuid())
+  supplierId           String
+  supplierProductId    String
+  supplierCategoryId   String?
+  supplierCategoryName String?
+  name                 String
+  description          String?       @db.Text
+  image                String?
+  supplierCost         Decimal       @db.Decimal(19, 2)
+  previousCost         Decimal?      @db.Decimal(19, 2)
+  // null means the supplier does not expose stock information.
+  stock                Int?
+  // Raw status as reported by the supplier, normalised into `normalizedStatus`.
+  status               String        @default("ACTIVE")
+  normalizedStatus     ProductStatus @default(ACTIVE)
+  // Set when the supplier has not answered for too long. Stale data is never
+  // silently treated as "out of stock".
+  isStale              Boolean       @default(false)
+  rawData              String?       @db.Text
+  lastSyncedAt         DateTime      @default(now())
+  lastChangedAt        DateTime?
+  lastSeenAt           DateTime      @default(now())
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  supplier            Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  category            Category? @relation(fields: [categoryId], references: [id])
-  mappings            ProductSupplierMapping[]
+  supplier Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id])
+
+  categoryId String?
+
+  mappings ProductSupplierMapping[]
 
   @@unique([supplierId, supplierProductId])
   @@index([supplierId])
   @@index([status])
+  @@index([normalizedStatus])
+  @@index([categoryId])
+  @@index([isStale])
 }
 
 model Product {
-  id                String    @id @default(cuid())
-  name              String
-  slug              String    @unique
-  description       String?
-  image             String?
-  categoryId        String?
-  sellingPrice      Decimal   @db.Numeric(19, 2)
-  profitType        String    @default("PERCENTAGE")
-  profitValue       Decimal   @db.Numeric(10, 2)
-  pricingMode       String    @default("AUTO")
-  status            String    @default("ACTIVE")
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  description  String?       @db.Text
+  image        String?
+  gallery      String?       @db.Text
+  categoryId   String?
+  // Cost of the currently selected supplier source, kept for admin views only.
+  supplierCost Decimal       @default(0) @db.Decimal(19, 2)
+  sellingPrice Decimal       @db.Decimal(19, 2)
+  profitType   ProfitType    @default(PERCENTAGE)
+  profitValue  Decimal       @default(10) @db.Decimal(10, 4)
+  pricingMode  PricingMode   @default(AUTO)
+  // Cached availability derived from active supplier mappings.
+  stock        Int?
+  status       ProductStatus @default(ACTIVE)
+  isFeatured   Boolean       @default(false)
+  isHidden     Boolean       @default(false)
+  sortOrder    Int           @default(0)
+  lastSyncedAt DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
-  category          Category? @relation(fields: [categoryId], references: [id])
-  mappings          ProductSupplierMapping[]
-  orders            Order[]
-  priceHistories    ProductPriceHistory[]
+  category       Category?                @relation(fields: [categoryId], references: [id])
+  mappings       ProductSupplierMapping[]
+  orders         Order[]
+  priceHistories ProductPriceHistory[]
 
   @@index([slug])
   @@index([status])
+  @@index([categoryId])
+  @@index([isFeatured])
+  @@index([isHidden])
+  @@index([sellingPrice])
 }
 
 model ProductSupplierMapping {
-  id                String    @id @default(cuid())
+  id                String   @id @default(cuid())
   productId         String
   supplierProductId String
   supplierId        String
-  priority          Int       @default(0)
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
+  priority          Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  supplierProduct   SupplierProduct @relation(fields: [supplierProductId], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplierProduct SupplierProduct @relation(fields: [supplierProductId], references: [id], onDelete: Cascade)
 
-  @@unique([productId, supplierId])
+  @@unique([productId, supplierProductId])
   @@index([productId])
   @@index([supplierId])
+  @@index([isActive])
 }
 
 model ProductPriceHistory {
-  id                String    @id @default(cuid())
-  productId         String
-  supplierId        String?
-  supplierCost      Decimal   @db.Numeric(19, 2)
-  sellingPrice      Decimal   @db.Numeric(19, 2)
-  profitRate        Decimal   @db.Numeric(10, 2)
-  recordedAt        DateTime  @default(now())
+  id                   String   @id @default(cuid())
+  productId            String
+  supplierId           String?
+  supplierProductId    String?
+  supplierCost         Decimal  @db.Decimal(19, 2)
+  previousCost         Decimal? @db.Decimal(19, 2)
+  sellingPrice         Decimal  @db.Decimal(19, 2)
+  previousSellingPrice Decimal? @db.Decimal(19, 2)
+  profitAmount         Decimal  @db.Decimal(19, 2)
+  profitRate           Decimal  @db.Decimal(10, 4)
+  // SYNC | MANUAL | SUPPLIER_CHANGE
+  source               String   @default("SYNC")
+  recordedAt           DateTime @default(now())
 
-  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@index([recordedAt])
+  @@index([source])
 }
 
-// ============ ORDERS ============
+// ============================================================================
+// ORDERS
+// ============================================================================
 
 enum OrderStatus {
   PENDING
@@ -368,161 +571,231 @@ enum OrderStatus {
   SUPPLIER_PENDING
   RECONCILIATION
   SUCCESS
+  PARTIALLY_FULFILLED
   FAILED
   REFUND_PENDING
   REFUNDED
 }
 
 model Order {
-  id                    String    @id @default(cuid())
-  userId                String
-  productId             String
-  supplierId            String
-  quantity              Int
-  supplierCost          Decimal   @db.Numeric(19, 2)
-  sellingPrice          Decimal   @db.Numeric(19, 2)
-  totalAmount           Decimal   @db.Numeric(19, 2)
-  profit                Decimal   @db.Numeric(19, 2)
-  supplierTransactionId String?
-  status                OrderStatus @default(PENDING)
-  errorDetails          String?
-  idempotencyKey        String?   @unique
-  createdAt             DateTime  @default(now())
-  completedAt           DateTime?
-  updatedAt             DateTime  @updatedAt
+  id                 String      @id @default(cuid())
+  orderCode          String      @unique
+  userId             String
+  productId          String
+  supplierId         String
+  supplierProductId  String?
+  quantity           Int
+  // Unit prices captured at purchase time. Never recomputed later.
+  supplierCost       Decimal     @db.Decimal(19, 2)
+  sellingPrice       Decimal     @db.Decimal(19, 2)
+  totalCost          Decimal     @db.Decimal(19, 2)
+  totalAmount        Decimal     @db.Decimal(19, 2)
+  profit             Decimal     @db.Decimal(19, 2)
+  deliveredQuantity  Int         @default(0)
+  capturedAmount     Decimal     @default(0) @db.Decimal(19, 2)
+  refundedAmount     Decimal     @default(0) @db.Decimal(19, 2)
+  supplierTransId    String?
+  supplierOrderRef   String?
+  couponCode         String?
+  status             OrderStatus @default(PENDING)
+  errorCode          String?
+  errorDetails       String?     @db.Text
+  attemptCount       Int         @default(0)
+  idempotencyKey     String?     @unique
+  reconciliationNote String?     @db.Text
+  priceConfirmedAt   DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  completedAt        DateTime?
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product               Product   @relation(fields: [productId], references: [id])
-  credentials           OrderCredentials?
-  statusHistories       OrderStatusHistory[]
-  reservation           WalletReservation?
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product         Product              @relation(fields: [productId], references: [id])
+  credentials     OrderCredential[]
+  statusHistories OrderStatusHistory[]
+  reservation     WalletReservation?
 
   @@index([userId])
   @@index([productId])
+  @@index([supplierId])
   @@index([status])
   @@index([createdAt])
+  @@index([orderCode])
+  @@index([supplierTransId])
 }
 
-model OrderCredentials {
-  id                String    @id @default(cuid())
-  orderId           String    @unique
-  accountData       String    @db.Text
-  encryptionMethod  String    @default("AES256")
-  createdAt         DateTime  @default(now())
+model OrderCredential {
+  id               String   @id @default(cuid())
+  orderId          String
+  // 1-based index of the delivered account inside the order.
+  position         Int
+  encryptedData    String   @db.Text
+  encryptionMethod String   @default("AES256GCM")
+  createdAt        DateTime @default(now())
 
-  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-}
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-model OrderStatusHistory {
-  id                String    @id @default(cuid())
-  orderId           String
-  statusFrom        OrderStatus?
-  statusTo          OrderStatus
-  reason            String?
-  changedAt         DateTime  @default(now())
-
-  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
+  @@unique([orderId, position])
   @@index([orderId])
 }
 
-// ============ PAYMENTS ============
+model OrderStatusHistory {
+  id         String       @id @default(cuid())
+  orderId    String
+  statusFrom OrderStatus?
+  statusTo   OrderStatus
+  reason     String?
+  actorId    String?
+  changedAt  DateTime     @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([changedAt])
+}
+
+// ============================================================================
+// PAYMENTS (customer deposits)
+// ============================================================================
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
 
 model PaymentTransaction {
-  id                String    @id @default(cuid())
-  walletId          String
-  amount            Decimal   @db.Numeric(19, 2)
-  transactionCode   String?   @unique
-  status            String    @default("PENDING")
-  paymentMethod     String    @default("VIETQR")
-  gatewayResponse   String?   @db.Text
-  idempotencyKey    String?   @unique
-  createdAt         DateTime  @default(now())
-  verifiedAt        DateTime?
+  id              String        @id @default(cuid())
+  userId          String
+  walletId        String
+  // Short unique memo the customer must include in the bank transfer.
+  paymentCode     String        @unique
+  amount          Decimal       @db.Decimal(19, 2)
+  receivedAmount  Decimal?      @db.Decimal(19, 2)
+  status          PaymentStatus @default(PENDING)
+  paymentMethod   String        @default("VIETQR")
+  gateway         String        @default("SEPAY")
+  gatewayTxnId    String?       @unique
+  gatewayResponse String?       @db.Text
+  idempotencyKey  String?       @unique
+  expiresAt       DateTime?
+  paidAt          DateTime?
+  verifiedAt      DateTime?
+  failureReason   String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([walletId])
   @@index([status])
   @@index([createdAt])
+  @@index([paymentCode])
 }
 
 model PaymentWebhook {
-  id                String    @id @default(cuid())
-  gatewayName       String
-  webhookId         String    @unique
-  transactionId     String
-  payload           String    @db.Text
-  signature         String
-  processed         Boolean   @default(false)
-  processedAt       DateTime?
-  status            String    @default("PENDING")
-  createdAt         DateTime  @default(now())
+  id          String    @id @default(cuid())
+  gatewayName String
+  // Provider-side event id; the unique constraint gives idempotent ingestion.
+  webhookId   String
+  payload     String    @db.Text
+  signature   String?
+  processed   Boolean   @default(false)
+  processedAt DateTime?
+  status      String    @default("PENDING")
+  error       String?
+  createdAt   DateTime  @default(now())
 
-  @@index([webhookId])
-  @@index([status])
+  @@unique([gatewayName, webhookId])
   @@index([processed])
-}
-
-// ============ SYSTEM & AUDIT ============
-
-model SystemSettings {
-  id                String    @id @default(cuid())
-  settingKey        String    @unique
-  settingValue      String    @db.Text
-  updatedAt         DateTime  @updatedAt
-
-  @@index([settingKey])
-}
-
-model EmailNotification {
-  id                String    @id @default(cuid())
-  supplierId        String?
-  email             String
-  notificationType  String
-  sent              Boolean   @default(false)
-  sentAt            DateTime?
-  status            String    @default("PENDING")
-  errorMessage      String?
-  createdAt         DateTime  @default(now())
-
-  @@index([email])
-  @@index([sentAt])
-}
-
-model NotificationSettings {
-  id                String    @id @default(cuid())
-  settingKey        String    @unique
-  settingValue      String    @db.Text
-
-  @@index([settingKey])
-}
-
-model AuditLog {
-  id                String    @id @default(cuid())
-  userId            String?
-  action            String
-  entityType        String
-  entityId          String?
-  changes           String?   @db.Text
-  ipAddress         String?
-  createdAt         DateTime  @default(now())
-
-  user              User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([entityType])
   @@index([createdAt])
 }
 
-// ============ IDEMPOTENCY ============
+// ============================================================================
+// NOTIFICATIONS, SETTINGS, AUDIT
+// ============================================================================
+
+model SystemSetting {
+  id           String   @id @default(cuid())
+  settingKey   String   @unique
+  settingValue String   @db.Text
+  // Public settings are safe to expose to the storefront.
+  isPublic     Boolean  @default(false)
+  description  String?
+  updatedAt    DateTime @updatedAt
+
+  @@index([settingKey])
+}
+
+model NotificationSetting {
+  id           String   @id @default(cuid())
+  settingKey   String   @unique
+  settingValue String   @db.Text
+  updatedAt    DateTime @updatedAt
+
+  @@index([settingKey])
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model EmailNotification {
+  id               String      @id @default(cuid())
+  supplierId       String?
+  recipient        String
+  notificationType String
+  subject          String?
+  body             String?     @db.Text
+  // Prevents sending the same alert over and over.
+  dedupeKey        String?     @unique
+  status           EmailStatus @default(PENDING)
+  attempts         Int         @default(0)
+  sentAt           DateTime?
+  errorMessage     String?
+  createdAt        DateTime    @default(now())
+
+  @@index([recipient])
+  @@index([notificationType])
+  @@index([sentAt])
+  @@index([status])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  changes    String?  @db.Text
+  metadata   String?  @db.Text
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([action])
+  @@index([createdAt])
+}
 
 model IdempotencyRecord {
-  id                String    @id @default(cuid())
-  idempotencyKey    String    @unique
-  endpoint          String
-  requestHash       String
-  response          String    @db.Text
-  createdAt         DateTime  @default(now())
-  expiresAt         DateTime
+  id             String   @id @default(cuid())
+  idempotencyKey String   @unique
+  endpoint       String
+  requestHash    String
+  response       String   @db.Text
+  statusCode     Int      @default(200)
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
 
   @@index([idempotencyKey])
   @@index([expiresAt])

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { encryptSecret } from "../src/lib/suppliers/http";
@@ -13,20 +14,25 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding database...");
 
-  // 1. Create or update Quang Vinh Media supplier
-  const quangVinhApiKey =
-    process.env.SUPPLIER_QUANGVINH_API_KEY ||
-    "194bd3c677f5969052b28cb294e4999cC6TvV0N5gOu9A3YZ4pFmknebtshS1GME";
+  const baseUrl =
+    process.env.SUPPLIER_QUANGVINH_BASE_URL || "https://quangvinhmedia.store/api";
+  const quangVinhApiKey = process.env.SUPPLIER_QUANGVINH_API_KEY;
+  if (!quangVinhApiKey) {
+    throw new Error(
+      "Missing SUPPLIER_QUANGVINH_API_KEY in .env — required to mirror supplier catalog"
+    );
+  }
 
+  // 1. Create or update Quang Vinh Media supplier from .env
   const supplier = await prisma.supplier.upsert({
     where: { name: "Quang Vinh Media" },
     update: {
       adapterKey: "quangvinh",
-      baseUrl: process.env.SUPPLIER_QUANGVINH_BASE_URL || "https://quangvinhmedia.store/api",
+      baseUrl,
       apiKey: encryptSecret(quangVinhApiKey),
       status: "ACTIVE",
       profitType: "PERCENTAGE",
-      profitValue: 20,
+      profitValue: 10, // lợi nhuận
       supportsBalanceApi: true,
       supportsStock: true,
       connectionStatus: "CONNECTED",
@@ -45,11 +51,11 @@ async function main() {
     create: {
       name: "Quang Vinh Media",
       adapterKey: "quangvinh",
-      baseUrl: process.env.SUPPLIER_QUANGVINH_BASE_URL || "https://quangvinhmedia.store/api",
+      baseUrl,
       apiKey: encryptSecret(quangVinhApiKey),
       status: "ACTIVE",
       profitType: "PERCENTAGE",
-      profitValue: 20,
+      profitValue: 10, // lợi nhuận
       supportsBalanceApi: true,
       supportsStock: true,
       connectionStatus: "CONNECTED",
@@ -63,6 +69,23 @@ async function main() {
   });
 
   console.log("Supplier ready:", supplier.name, "(id:", supplier.id, ")");
+  console.log("Base URL:", baseUrl);
+
+  // Auto-sync settings: every 5 minutes by default
+  await prisma.supplierSyncSettings.upsert({
+    where: { supplierId: supplier.id },
+    create: {
+      supplierId: supplier.id,
+      syncInterval: 300,
+      isAutoSyncEnabled: true,
+      nextSyncAt: new Date(),
+    },
+    update: {
+      isAutoSyncEnabled: true,
+      syncInterval: 300,
+    },
+  });
+  console.log("Auto-sync enabled every 300s — run: npm run worker:sync");
 
   // 2. Create Admin user if none exists
   const adminEmail = "admin@digishop.com";
@@ -88,16 +111,26 @@ async function main() {
     console.log("Admin account created:", admin.email, "(Password: Admin@123456)");
   }
 
-  // 3. Trigger initial product sync from Quang Vinh Media live API
-  console.log("Syncing products from supplier API...");
+  // 3. Initial full catalog mirror from supplier API → SupplierProduct + Product
+  console.log("Mirroring products from supplier API...");
   try {
     const result = await syncSupplierProducts(supplier.id, "MANUAL");
-    console.log("Product sync completed successfully!");
+    console.log("Product sync completed:", result.status);
     console.log("- Total products:", result.totalProducts);
     console.log("- New products:", result.newProducts);
     console.log("- Updated products:", result.updatedProducts);
+    console.log("- Price changed:", result.priceChangedProducts);
+    console.log("- Deactivated:", result.deactivatedProducts);
+    console.log("- Failed:", result.failedProducts);
+    if (result.status === "FAILED") {
+      console.warn("Sync finished with FAILED status — run: npm run db:sync");
+    }
   } catch (err) {
-    console.error("Product sync failed:", (err as Error).message);
+    console.warn(
+      "Initial catalog mirror failed:",
+      err instanceof Error ? err.message : err
+    );
+    console.warn("Supplier row is ready. Fix network/API key then run: npm run db:sync");
   }
 }
 

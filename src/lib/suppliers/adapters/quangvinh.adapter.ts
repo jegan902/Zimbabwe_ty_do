@@ -26,25 +26,23 @@ import {
 /**
  * Quang Vinh Media adapter.
  *
- * Documented endpoints (from the operator's brief):
+ * Documented endpoints:
  *   GET  /profile.php?api_key=KEY
- *   GET  /products.php?api_key=KEY
+ *   GET  /products.php?api_key=KEY          (categories + products)
  *   GET  /product.php?api_key=KEY&product=ID
  *   GET  /order.php?api_key=KEY&order=ORDER_ID
- *   POST /buy_product   multipart: action=buyProduct, id, amount, coupon, api_key
+ *   POST /buy_product  multipart form-data:
+ *        action=buyProduct, id, amount, coupon?, api_key
  *
- * VERIFICATION STATUS: the response bodies have NOT been verified against a live
- * authenticated account. Every parser below is written to tolerate several
- * plausible field spellings and to fail with an explicit "unverified shape"
- * error instead of inventing data. Capability flags reflect what the brief
- * documented — nothing more:
- *   - balance is NOT assumed, even though profile.php may return one
- *   - stock is NOT assumed
+ * Verified buy success shape (operator sample):
+ *   { status: "success", msg, trans_id, data: ["user|pass", ...] }
+ *
+ * Parsers still tolerate alternate field spellings and fail with an explicit
+ * "unverified shape" error instead of inventing data.
  *   - webhooks are NOT assumed
  *
- * Credentials are only ever read from the `Context` passed by the registry,
- * which loads them server-side. They are never logged and never returned to a
- * client.
+ * Credentials are only ever read from the Context passed by the registry
+ * (server-side). They are never logged and never returned to a client.
  */
 
 const TIMEOUT_DEFAULT = 30_000;
@@ -344,11 +342,9 @@ export class QuangVinhAdapter implements SupplierAdapter {
     }
 
     // Products may be a flat array, or nested inside a category object.
-    const productRaw =
-      findArray(json, ["products", "product", "items", "data", "sanpham"]) ??
-      this.collectProductsFromCategories(json);
+    const entries = this.collectProductEntries(json);
 
-    if (!productRaw) {
+    if (!entries) {
       throw new UnverifiedShapeError(
         "products.php returned JSON but no product array was found",
         describeShape(json)
@@ -358,24 +354,8 @@ export class QuangVinhAdapter implements SupplierAdapter {
     const products: NormalizedProduct[] = [];
     const seen = new Set<string>();
 
-    for (const item of productRaw) {
-      const record = asRecord(item);
-      // A category-shaped item also carries an `id`, so skip it when it clearly
-      // contains a nested product list.
-      if (record && findArray(record, ["products", "items", "product"])) {
-        const fallback = mapCategory(item, categoryMap.size);
-        const nested = findArray(record, ["products", "items", "product"]) ?? [];
-        for (const child of nested) {
-          const mapped = mapProduct(child, fallback, "Sản phẩm");
-          if (mapped && !seen.has(mapped.supplierProductId)) {
-            seen.add(mapped.supplierProductId);
-            products.push(mapped);
-          }
-        }
-        continue;
-      }
-
-      const mapped = mapProduct(item, null, "Sản phẩm");
+    for (const { raw, category } of entries) {
+      const mapped = mapProduct(raw, category, "Sản phẩm");
       if (mapped && !seen.has(mapped.supplierProductId)) {
         seen.add(mapped.supplierProductId);
         products.push(mapped);
@@ -385,20 +365,49 @@ export class QuangVinhAdapter implements SupplierAdapter {
     return { products, categories: categoryMap.size > 0 ? categories : [] };
   }
 
-  /** Handles the `[{category, products:[...]}, ...]` shape without inventing keys. */
-  private collectProductsFromCategories(json: unknown): unknown[] | null {
-    const root = asRecord(json);
-    const categories = asRecord(root) ? getField(root, ["categories", "data"]) : undefined;
-    const list = Array.isArray(categories) ? categories : findArray(json, ["categories"]);
-    if (!list) return null;
+  /**
+   * Normalises both payload shapes into `{ raw, category }` entries so the
+   * parent category survives flattening:
+   *   - `{ products: [...] }`                       flat list, no category
+   *   - `{ categories: [{ id, name, products }] }`  nested, category is the parent
+   */
+  private collectProductEntries(
+    json: unknown
+  ): Array<{ raw: unknown; category: { id: string; name: string } | null }> | null {
+    const entries: Array<{ raw: unknown; category: { id: string; name: string } | null }> = [];
 
-    const collected: unknown[] = [];
-    for (const entry of list) {
-      const record = asRecord(entry);
-      const nested = record ? findArray(record, ["products", "items", "product"]) : null;
-      if (nested) collected.push(...nested);
+    const flatRaw = findArray(json, ["products", "product", "items", "data", "sanpham"]);
+    if (flatRaw) {
+      for (const [index, item] of flatRaw.entries()) {
+        const record = asRecord(item);
+        // A category-shaped item also carries an `id`, so treat it as a parent
+        // when it clearly contains a nested product list.
+        if (record && findArray(record, ["products", "items", "product"])) {
+          const parent = mapCategory(item, index);
+          const fallback = parent ? { id: parent.id, name: parent.name } : null;
+          const nested = findArray(record, ["products", "items", "product"]) ?? [];
+          for (const child of nested) entries.push({ raw: child, category: fallback });
+          continue;
+        }
+        entries.push({ raw: item, category: null });
+      }
+      return entries.length > 0 ? entries : null;
     }
-    return collected.length > 0 ? collected : null;
+
+    const categoryRaw = findArray(json, ["categories", "category", "groups", "danhmuc"]);
+    if (!categoryRaw) return null;
+
+    for (const [index, item] of categoryRaw.entries()) {
+      const record = asRecord(item);
+      if (!record) continue;
+      const nested = findArray(record, ["products", "items", "product"]);
+      if (!nested) continue;
+      const parent = mapCategory(item, index);
+      const fallback = parent ? { id: parent.id, name: parent.name } : null;
+      for (const child of nested) entries.push({ raw: child, category: fallback });
+    }
+
+    return entries.length > 0 ? entries : null;
   }
 
   async getProduct(

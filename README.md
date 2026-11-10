@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Digishop — trung gian bán tài khoản số đa nhà cung cấp
 
-## Getting Started
+Website mirror catalog từ API nhà cung cấp (Quang Vinh, …), bán qua ví khách hàng, mua giúp bằng API key của bạn.
 
-First, run the development server:
+## Kiến trúc catalog
+
+1. **Sync** gọi API NCC → chuẩn hóa → `SupplierProduct` + `Product` + mapping + tính giá bán.
+2. **Khách xem** đọc Postgres (nhanh, có cache ngắn).
+3. **Khách mua** revalidate giá live từ NCC; nếu đổi giá phải xác nhận.
+
+Cập nhật lại catalog: admin sync hoặc `npm run db:sync`.
+
+## Setup local
+
+Yêu cầu: Docker Desktop, Node 20+.
 
 ```bash
+# 1. Biến môi trường (đã có mẫu trong .env)
+#    DATABASE_URL, REDIS_URL, SESSION_SECRET
+#    SUPPLIER_QUANGVINH_BASE_URL, SUPPLIER_QUANGVINH_API_KEY
+
+# 2. Hạ tầng
+docker compose up -d
+
+# 3. Schema + seed (seed mirror toàn bộ sản phẩm từ Quang Vinh)
+npm install
+npm run db:setup
+
+# 4. Dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Hoặc double-click `scripts/setup-local-db.command`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Scripts hữu ích
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Lệnh | Việc |
+|------|------|
+| `npm run db:migrate` | Áp migration Prisma |
+| `npm run db:seed` | Upsert supplier từ `.env` + sync catalog lần đầu |
+| `npm run db:sync` | Đồng bộ lại mọi supplier ACTIVE |
+| `npm run db:setup` | migrate + seed |
+| `npm run worker:sync` | Worker tự đồng bộ catalog (mặc định mỗi 5 phút / supplier) |
 
-## Learn More
+Admin mặc định sau seed: `admin@digishop.com` / `Admin@123456`.
 
-To learn more about Next.js, take a look at the following resources:
+### Auto sync
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Chạy worker song song với Next (terminal 2):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run worker:sync
+```
 
-## Deploy on Vercel
+Worker đọc `SupplierSyncSettings` (`isAutoSyncEnabled`, `syncInterval` giây: 60/300/900/1800/3600). Mặc định **300s (5 phút)**. Manual sync vẫn dùng `npm run db:sync` hoặc nút admin.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Realtime SSE (sau sync): `GET /api/realtime`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Tài liệu nghiệp vụ
+
+Xem [writing-block.md](writing-block.md).

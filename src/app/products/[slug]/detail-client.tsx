@@ -4,12 +4,16 @@ import { useState } from "react";
 import { BuyModal } from "@/components/portal/buy-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Zap, ShieldCheck, ShoppingCart, RefreshCw, Clock } from "lucide-react";
-import Link from "next/link";
+import { Zap, ShieldCheck, ShoppingCart, RefreshCw, Clock, Package, ShoppingBag } from "lucide-react";
 
 export function ProductDetailClient({ product }: { product: any }) {
   const [modalOpen, setModalOpen] = useState(false);
   const price = Number(product.sellingPrice);
+  const stockLabel =
+    product.stock === null || product.stock === undefined
+      ? "Liên hệ"
+      : Number(product.stock).toLocaleString("vi-VN");
+  const soldLabel = Number(product.soldCount ?? 0).toLocaleString("vi-VN");
 
   return (
     <>
@@ -46,6 +50,21 @@ export function ProductDetailClient({ product }: { product: any }) {
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black leading-tight">{product.name}</h1>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border bg-card p-3">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Package className="h-3.5 w-3.5" /> Còn lại
+              </span>
+              <div className="mt-1 text-lg font-black text-foreground">{stockLabel}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-3">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <ShoppingBag className="h-3.5 w-3.5" /> Đã bán
+              </span>
+              <div className="mt-1 text-lg font-black text-foreground">{soldLabel}</div>
+            </div>
           </div>
 
           <div className="rounded-xl bg-primary/5 border border-primary/20 p-4">

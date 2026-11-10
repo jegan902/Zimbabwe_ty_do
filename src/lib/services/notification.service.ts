@@ -29,6 +29,54 @@ function getMailTransporter() {
   });
 }
 
+export async function sendOtpEmail(email: string, otp: string): Promise<{ sent: boolean; devOtp?: string }> {
+  const transporter = getMailTransporter();
+  const subject = `[Digishop] Mã OTP đặt lại mật khẩu: ${otp}`;
+  const text = `Xin chào,\n\nMã xác thực OTP của bạn để đặt lại mật khẩu là: ${otp}\nMã này có hiệu lực trong 15 phút. Vui lòng không cung cấp mã này cho người khác.\n\nTrân trọng,\nDigishop`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="color: #4f46e5; margin: 0; font-size: 22px; font-weight: 800;">Digishop</h2>
+        <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Xác thực yêu cầu đặt lại mật khẩu</p>
+      </div>
+      <p style="color: #334155; font-size: 14px; line-height: 1.5;">
+        Xin chào,<br>Bạn vừa yêu cầu lấy lại mật khẩu cho tài khoản <strong>${email}</strong>. Đây là mã OTP xác thực của bạn:
+      </p>
+      <div style="margin: 24px 0; padding: 18px; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; text-align: center;">
+        <span style="font-size: 32px; font-weight: 900; letter-spacing: 8px; color: #4f46e5; font-family: monospace;">${otp}</span>
+      </div>
+      <p style="color: #64748b; font-size: 12px; line-height: 1.5;">
+        Mã OTP này có hiệu lực trong vòng <strong>15 phút</strong>. Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email hoặc liên hệ với bộ phận hỗ trợ.
+      </p>
+      <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
+      <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">
+        © ${new Date().getFullYear()} Digishop Marketplace. All rights reserved.
+      </p>
+    </div>
+  `;
+
+  if (!transporter) {
+    logger.info({ email, otp }, "SMTP not configured — OTP logged for development");
+    console.log(`\n=========================================\n[OTP EMAIL] To: ${email}\n[OTP CODE]: ${otp}\n=========================================\n`);
+    return { sent: false, devOtp: otp };
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `"Digishop Support" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to: email,
+      subject,
+      text,
+      html,
+    });
+    return { sent: true };
+  } catch (err) {
+    logger.error({ err, email }, "Failed to send OTP email via SMTP, fallback to console");
+    console.log(`\n=========================================\n[OTP EMAIL FALLBACK] To: ${email}\n[OTP CODE]: ${otp}\n=========================================\n`);
+    return { sent: false, devOtp: otp };
+  }
+}
+
 export async function sendAdminAlert(params: SendAlertParams): Promise<boolean> {
   const recipients = adminAlertEmails();
   if (recipients.length === 0) {

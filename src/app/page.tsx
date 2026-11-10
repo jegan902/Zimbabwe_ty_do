@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCategories, getProducts } from "@/lib/services/catalog.service";
 import { ProductGrid } from "@/components/portal/product-grid";
+import { CatalogRealtime } from "@/components/portal/catalog-realtime";
 import { Zap, ShieldCheck, CreditCard, ChevronRight, Sparkles, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -14,6 +15,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-12 pb-16">
+      <CatalogRealtime />
       {/* Hero Banner */}
       <section className="relative overflow-hidden bg-gradient-to-b from-primary/10 via-background to-background border-b pt-12 pb-16">
         <div className="container mx-auto px-4 sm:px-8">

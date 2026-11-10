@@ -62,6 +62,9 @@ export async function checkoutDirect(input: CheckoutInput) {
   if (!product || product.status !== "ACTIVE" || product.isHidden) {
     throw new NotFoundError("Sản phẩm không tồn tại hoặc đã ngừng kinh doanh");
   }
+  if (product.stock !== null && product.stock <= 0) {
+    throw new ConflictError("Sản phẩm hiện đang hết hàng");
+  }
 
   const activeMappings = product.mappings.filter(
     (m: any) => m.supplierProduct?.supplier?.status === "ACTIVE"
@@ -86,7 +89,7 @@ export async function checkoutDirect(input: CheckoutInput) {
     logger.warn({ err }, "Could not fetch live product before checkout, using cached cost");
   }
 
-  // 3. Compute Selling Price
+  // 3. Compute Selling Price (live cost when AUTO; MANUAL keeps admin price)
   const unitSellingPrice =
     product.pricingMode === "AUTO"
       ? computeSellingPrice(
@@ -96,7 +99,12 @@ export async function checkoutDirect(input: CheckoutInput) {
         )
       : d(product.sellingPrice.toString());
 
-  if (input.confirmedPrice && !d(input.confirmedPrice).equals(unitSellingPrice)) {
+  // Customer must confirm when the live price differs from what they saw (DB price)
+  // or from a previous confirmation prompt.
+  const expectedPrice = input.confirmedPrice
+    ? d(input.confirmedPrice)
+    : d(product.sellingPrice.toString());
+  if (!expectedPrice.equals(unitSellingPrice)) {
     throw new ConflictError("Giá sản phẩm vừa thay đổi", {
       newPrice: unitSellingPrice.toFixed(2),
     });

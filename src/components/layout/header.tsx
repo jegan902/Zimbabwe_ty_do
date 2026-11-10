@@ -19,6 +19,7 @@ import {
   User,
   PlusCircle,
   Menu,
+  Lock,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -91,6 +92,12 @@ export function Header() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => window.location.href = "/account"} className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" /> Thông tin tài khoản
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.location.href = "/account?tab=security"} className="cursor-pointer">
+                    <Lock className="mr-2 h-4 w-4" /> Đổi mật khẩu
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.location.href = "/wallet"} className="cursor-pointer">
                     <Wallet className="mr-2 h-4 w-4" /> Nạp tiền vào ví
                   </DropdownMenuItem>

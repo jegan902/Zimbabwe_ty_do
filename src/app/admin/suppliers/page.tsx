@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Truck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Play, Loader2, DollarSign } from "lucide-react";
+import { Truck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Play, Loader2, DollarSign, Settings, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
@@ -17,6 +17,12 @@ export default function AdminSuppliersPage() {
   const [editingSupplier, setEditingSupplier] = useState<any>(null);
   const [newBalance, setNewBalance] = useState("");
   const [newThreshold, setNewThreshold] = useState("");
+
+  // Edit config / API Key modal
+  const [configSupplier, setConfigSupplier] = useState<any>(null);
+  const [editApiKey, setEditApiKey] = useState("");
+  const [editBaseUrl, setEditBaseUrl] = useState("");
+  const [editProfitValue, setEditProfitValue] = useState("");
 
   const fetchSuppliers = async () => {
     try {
@@ -100,6 +106,32 @@ export default function AdminSuppliersPage() {
     }
   };
 
+  const handleSaveConfig = async () => {
+    if (!configSupplier) return;
+    setActionLoading("save-config");
+    try {
+      const res = await fetch(`/api/admin/suppliers/${configSupplier.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: editApiKey.trim() || undefined,
+          baseUrl: editBaseUrl.trim() || undefined,
+          profitValue: editProfitValue ? Number(editProfitValue) : undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Cập nhật thất bại");
+      toast.success("Đã cập nhật API Key & cấu hình nhà cung cấp thành công!");
+      setConfigSupplier(null);
+      setEditApiKey("");
+      fetchSuppliers();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -117,134 +149,210 @@ export default function AdminSuppliersPage() {
         </p>
       </div>
 
-      <div className="space-y-4">
-        {suppliers.map((s) => (
-          <div key={s.id} className="rounded-2xl border bg-card p-6 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                  <Truck className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-base">{s.name}</h3>
-                    <Badge variant="outline" className="text-[10px] font-mono">
-                      {s.adapterKey}
-                    </Badge>
+      <div className="space-y-6">
+        {suppliers.map((s) => {
+          const intermediaryUser = s.accountProfile?.username || "dinhminh4424";
+          const liveBal = s.accountProfile?.balance ?? s.balance?.balance ?? "0";
+          const isConnected = s.connectionStatus === "CONNECTED";
+
+          return (
+            <div key={s.id} className="rounded-2xl border bg-card p-6 shadow-sm space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner">
+                    <Truck className="h-6 w-6" />
                   </div>
-                  <p className="text-xs text-muted-foreground font-mono mt-0.5">{s.baseUrl}</p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-lg">{s.name}</h3>
+                      <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
+                        Adapter: {s.adapterKey}
+                      </Badge>
+                      <Badge
+                        variant={isConnected ? "default" : s.connectionStatus === "ERROR" ? "destructive" : "secondary"}
+                        className="text-[11px] font-semibold"
+                      >
+                        {isConnected ? "🟢 Đã kết nối API" : s.connectionStatus === "ERROR" ? "🔴 Lỗi kết nối" : "Chưa kiểm tra"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{s.baseUrl}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleTestConnection(s.id)}
+                    disabled={actionLoading === `test-${s.id}`}
+                    className="h-8 text-xs font-semibold gap-1.5"
+                  >
+                    {actionLoading === `test-${s.id}` ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Đồng bộ số dư thực tế từ NCC
+                  </Button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    s.connectionStatus === "CONNECTED"
-                      ? "default"
-                      : s.connectionStatus === "ERROR"
-                      ? "destructive"
-                      : "secondary"
-                  }
-                  className="text-xs"
-                >
-                  {s.connectionStatus === "CONNECTED"
-                    ? "Đã kết nối"
-                    : s.connectionStatus === "ERROR"
-                    ? "Lỗi kết nối"
-                    : "Chưa kiểm tra"}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
-              <div className="rounded-xl bg-muted/40 p-3 border">
-                <span className="text-muted-foreground block text-[11px]">Số dư vốn hiện tại</span>
-                <span className="font-black text-base text-foreground mt-0.5 block">
-                  {Number(s.balance?.balance || 0).toLocaleString("vi-VN")}đ
-                </span>
-                <span className="text-[10px] text-muted-foreground mt-1 block">
-                  Loại: {s.balance?.balanceType || "ESTIMATED"}
-                </span>
-              </div>
-
-              <div className="rounded-xl bg-muted/40 p-3 border">
-                <span className="text-muted-foreground block text-[11px]">Ngưỡng cảnh báo số dư</span>
-                <span className="font-black text-base text-amber-600 mt-0.5 block">
-                  {Number(s.balance?.alertThreshold || 0).toLocaleString("vi-VN")}đ
-                </span>
-                <span className="text-[10px] text-muted-foreground mt-1 block">
-                  Tự động gửi email khi dưới ngưỡng
-                </span>
-              </div>
-
-              <div className="rounded-xl bg-muted/40 p-3 border">
-                <span className="text-muted-foreground block text-[11px]">Sản phẩm nguồn</span>
-                <span className="font-black text-base text-foreground mt-0.5 block">
-                  {s.productCount} sản phẩm
-                </span>
-                <span className="text-[10px] text-muted-foreground mt-1 block">
-                  Lợi nhuận: +{s.profitValue}%
-                </span>
-              </div>
-
-              <div className="rounded-xl bg-muted/40 p-3 border">
-                <span className="text-muted-foreground block text-[11px]">Đồng bộ gần nhất</span>
-                <span className="font-bold text-xs mt-0.5 block">
-                  {s.lastSyncAt ? new Date(s.lastSyncAt).toLocaleString("vi-VN") : "Chưa đồng bộ"}
-                </span>
-                {s.lastSyncError && (
-                  <span className="text-[10px] text-destructive mt-1 block truncate">
-                    {s.lastSyncError}
+              {/* Intermediary Account Highlight Box */}
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-primary flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-primary" />
+                    THÔNG TIN TÀI KHOẢN TRUNG GIAN KẾT NỐI (INTERMEDIARY ACCOUNT)
                   </span>
-                )}
+                  <span className="text-[11px] text-muted-foreground">
+                    Dùng API Key để tự động mua tài khoản số bằng tài khoản của bạn tại NCC
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-card p-3 border shadow-xs">
+                    <span className="text-muted-foreground block text-[11px] font-medium">Tên tài khoản tại NCC</span>
+                    <span className="font-mono font-black text-base text-primary mt-0.5 block">
+                      {intermediaryUser}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                      Tài khoản liên kết API
+                    </span>
+                  </div>
+
+                  <div className="rounded-lg bg-card p-3 border shadow-xs">
+                    <span className="text-muted-foreground block text-[11px] font-medium">
+                      Số dư thực tế tại NCC (Live API)
+                    </span>
+                    <span className="font-black text-base text-foreground mt-0.5 block">
+                      {Number(liveBal).toLocaleString("vi-VN")}đ
+                    </span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5 block">
+                      {Number(liveBal) <= 0 ? "⚠️ Số dư vốn NCC đang bằng 0" : "Xác nhận từ profile.php"}
+                    </span>
+                  </div>
+
+                  <div className="rounded-lg bg-card p-3 border shadow-xs">
+                    <span className="text-muted-foreground block text-[11px] font-medium">Trạng thái API & Ping</span>
+                    <span className="font-bold text-xs mt-1 block">
+                      {s.lastCheckedAt ? new Date(s.lastCheckedAt).toLocaleString("vi-VN") : "Chưa kiểm tra"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                      Timeout cấu hình: {s.timeoutMs / 1000}s
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* System Working Capital Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
+                <div className="rounded-xl bg-muted/40 p-3.5 border">
+                  <span className="text-muted-foreground block text-[11px]">Số dư vốn ghi nhận trong DB</span>
+                  <span className="font-black text-base text-foreground mt-0.5 block">
+                    {Number(s.balance?.balance || 0).toLocaleString("vi-VN")}đ
+                  </span>
+                  <span className="text-[10px] text-muted-foreground mt-1 block">
+                    Loại: <Badge variant="outline" className="text-[9px] py-0 px-1">{s.balance?.balanceType || "ESTIMATED"}</Badge>
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-muted/40 p-3.5 border">
+                  <span className="text-muted-foreground block text-[11px]">Ngưỡng cảnh báo vốn thấp</span>
+                  <span className="font-black text-base text-amber-600 mt-0.5 block">
+                    {Number(s.balance?.alertThreshold || 0).toLocaleString("vi-VN")}đ
+                  </span>
+                  <span className="text-[10px] text-muted-foreground mt-1 block">
+                    Tự gửi email cảnh báo khi dưới ngưỡng
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-muted/40 p-3.5 border">
+                  <span className="text-muted-foreground block text-[11px]">Sản phẩm nguồn đang liên kết</span>
+                  <span className="font-black text-base text-foreground mt-0.5 block">
+                    {s.productCount} sản phẩm
+                  </span>
+                  <span className="text-[10px] text-muted-foreground mt-1 block">
+                    Lợi nhuận: +{s.profitValue}%
+                  </span>
+                </div>
+
+                <div className="rounded-xl bg-muted/40 p-3.5 border">
+                  <span className="text-muted-foreground block text-[11px]">Đồng bộ catalog gần nhất</span>
+                  <span className="font-bold text-xs mt-0.5 block">
+                    {s.lastSyncAt ? new Date(s.lastSyncAt).toLocaleString("vi-VN") : "Chưa đồng bộ"}
+                  </span>
+                  {s.lastSyncError ? (
+                    <span className="text-[10px] text-destructive mt-1 block truncate">
+                      {s.lastSyncError}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-600 mt-1 block">Hoạt động bình thường</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingSupplier(s);
+                    setNewBalance(s.balance?.balance || "0");
+                    setNewThreshold(s.balance?.alertThreshold || "100000");
+                  }}
+                  className="h-8 text-xs font-semibold gap-1.5"
+                >
+                  <DollarSign className="h-3.5 w-3.5" /> Điều chỉnh số dư & Ngưỡng
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setConfigSupplier(s);
+                    setEditBaseUrl(s.baseUrl || "");
+                    setEditProfitValue(s.profitValue || "10");
+                    setEditApiKey("");
+                  }}
+                  className="h-8 text-xs font-semibold gap-1.5"
+                >
+                  <Settings className="h-3.5 w-3.5" /> Cài đặt API Key & NCC
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestConnection(s.id)}
+                  disabled={actionLoading === `test-${s.id}`}
+                  className="h-8 text-xs font-semibold gap-1.5"
+                >
+                  {actionLoading === `test-${s.id}` ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  Kiểm tra kết nối API
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={() => handleSyncNow(s.id)}
+                  disabled={actionLoading === `sync-${s.id}`}
+                  className="h-8 text-xs font-bold gap-1.5 shadow-sm"
+                >
+                  {actionLoading === `sync-${s.id}` ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5" />
+                  )}
+                  Đồng bộ sản phẩm ngay
+                </Button>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingSupplier(s);
-                  setNewBalance(s.balance?.balance || "0");
-                  setNewThreshold(s.balance?.alertThreshold || "100000");
-                }}
-                className="h-8 text-xs font-semibold gap-1.5"
-              >
-                <DollarSign className="h-3.5 w-3.5" /> Điều chỉnh số dư
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleTestConnection(s.id)}
-                disabled={actionLoading === `test-${s.id}`}
-                className="h-8 text-xs font-semibold gap-1.5"
-              >
-                {actionLoading === `test-${s.id}` ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-                Kiểm tra API
-              </Button>
-
-              <Button
-                size="sm"
-                onClick={() => handleSyncNow(s.id)}
-                disabled={actionLoading === `sync-${s.id}`}
-                className="h-8 text-xs font-bold gap-1.5 shadow-sm"
-              >
-                {actionLoading === `sync-${s.id}` ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Play className="h-3.5 w-3.5" />
-                )}
-                Đồng bộ ngay
-              </Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Edit Balance Dialog */}
@@ -290,6 +398,74 @@ export default function AdminSuppliersPage() {
               <Button onClick={handleSaveBalance} disabled={actionLoading === "save-balance"}>
                 {actionLoading === "save-balance" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Lưu thay đổi
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Edit Config / API Key Dialog */}
+      {configSupplier && (
+        <Dialog open={true} onOpenChange={() => setConfigSupplier(null)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <KeyRound className="h-5 w-5 text-primary" />
+                Cài đặt API Key & Nhà cung cấp: {configSupplier.name}
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Mỗi nhà cung cấp được cấu hình một API Key của bạn để hệ thống tự động mua tài khoản số.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">API Key mới (để trống nếu giữ nguyên)</label>
+                <Input
+                  type="password"
+                  value={editApiKey}
+                  onChange={(e) => setEditApiKey(e.target.value)}
+                  placeholder="Nhập API Key mới từ nhà cung cấp..."
+                  className="h-9 font-mono text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  API Key được mã hóa AES-256 trước khi lưu vào database và không bao giờ gửi ra trình duyệt.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">API Base URL</label>
+                <Input
+                  type="text"
+                  value={editBaseUrl}
+                  onChange={(e) => setEditBaseUrl(e.target.value)}
+                  placeholder="https://quangvinhmedia.store/api"
+                  className="h-9 font-mono text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">% Lợi nhuận mặc định cộng vào giá nhập</label>
+                <Input
+                  type="number"
+                  value={editProfitValue}
+                  onChange={(e) => setEditProfitValue(e.target.value)}
+                  placeholder="10"
+                  className="h-9 font-bold text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Ví dụ: 10% nghĩa là giá nhập 100.000đ sẽ tự động bán ra 110.000đ.
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfigSupplier(null)}>
+                Hủy
+              </Button>
+              <Button onClick={handleSaveConfig} disabled={actionLoading === "save-config"}>
+                {actionLoading === "save-config" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Lưu cấu hình
               </Button>
             </DialogFooter>
           </DialogContent>

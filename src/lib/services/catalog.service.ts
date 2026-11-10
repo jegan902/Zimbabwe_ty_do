@@ -16,9 +16,10 @@ export interface ProductListParams {
 }
 
 export async function getCategories() {
-  const cached = await cacheGet<Array<{ id: string; name: string; slug: string; _count: { products: number } }>>(
-    "cache:categories:list"
-  );
+  const cacheKey = `${CACHE_KEYS.categories}:list`;
+  const cached = await cacheGet<
+    Array<{ id: string; name: string; slug: string; _count: { products: number } }>
+  >(cacheKey);
   if (cached) return cached;
 
   const categories = await prisma.category.findMany({
@@ -33,15 +34,39 @@ export async function getCategories() {
       _count: {
         select: {
           products: {
-            where: { status: "ACTIVE", isHidden: false },
+            where: {
+              status: "ACTIVE",
+              isHidden: false,
+              OR: [{ stock: null }, { stock: { gt: 0 } }],
+            },
           },
         },
       },
     },
   });
 
-  await cacheSet("cache:categories:list", categories, 300);
+  await cacheSet(cacheKey, categories, 60);
   return categories;
+}
+
+/** Units delivered in successful / partially fulfilled orders. */
+async function getSoldCounts(productIds: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (productIds.length === 0) return map;
+
+  const rows = await prisma.order.groupBy({
+    by: ["productId"],
+    where: {
+      productId: { in: productIds },
+      status: { in: ["SUCCESS", "PARTIALLY_FULFILLED"] },
+    },
+    _sum: { deliveredQuantity: true },
+  });
+
+  for (const row of rows) {
+    map.set(row.productId, row._sum.deliveredQuantity ?? 0);
+  }
+  return map;
 }
 
 export async function getProducts(params: ProductListParams = {}) {
@@ -50,9 +75,12 @@ export async function getProducts(params: ProductListParams = {}) {
   const skip = (page - 1) * limit;
 
   const where: Prisma.ProductWhereInput = {};
+  const andFilters: Prisma.ProductWhereInput[] = [];
 
   if (!params.includeHidden) {
     where.isHidden = false;
+    // Hide explicit out-of-stock. null stock = unknown → still show.
+    andFilters.push({ OR: [{ stock: null }, { stock: { gt: 0 } }] });
   }
 
   if (params.status && params.status !== "ALL") {
@@ -66,10 +94,16 @@ export async function getProducts(params: ProductListParams = {}) {
   }
 
   if (params.search) {
-    where.OR = [
-      { name: { contains: params.search, mode: "insensitive" } },
-      { description: { contains: params.search, mode: "insensitive" } },
-    ];
+    andFilters.push({
+      OR: [
+        { name: { contains: params.search, mode: "insensitive" } },
+        { description: { contains: params.search, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  if (andFilters.length > 0) {
+    where.AND = andFilters;
   }
 
   if (params.minPrice !== undefined || params.maxPrice !== undefined) {
@@ -121,10 +155,13 @@ export async function getProducts(params: ProductListParams = {}) {
     prisma.product.count({ where }),
   ]);
 
+  const soldCounts = await getSoldCounts(items.map((p) => p.id));
+
   return {
     items: items.map((p) => ({
       ...p,
       sellingPrice: p.sellingPrice.toString(),
+      soldCount: soldCounts.get(p.id) ?? 0,
     })),
     total,
     page,
@@ -160,11 +197,22 @@ export async function getProductBySlug(slug: string) {
   });
 
   if (!product) throw new NotFoundError("Sản phẩm");
+  if (product.status !== "ACTIVE" || product.isHidden) {
+    throw new NotFoundError("Sản phẩm");
+  }
+  if (product.stock !== null && product.stock <= 0) {
+    throw new NotFoundError("Sản phẩm");
+  }
 
   // Determine availability
   const hasActiveSource = product.mappings.some(
-    (m: any) => m.supplierProduct?.supplier?.status === "ACTIVE" && !m.supplierProduct?.isStale
+    (m: any) =>
+      m.supplierProduct?.supplier?.status === "ACTIVE" &&
+      !m.supplierProduct?.isStale &&
+      (m.supplierProduct?.stock === null || m.supplierProduct?.stock > 0)
   );
+
+  const soldCounts = await getSoldCounts([product.id]);
 
   const formatted = {
     id: product.id,
@@ -175,6 +223,7 @@ export async function getProductBySlug(slug: string) {
     gallery: product.gallery ? JSON.parse(product.gallery) : [],
     sellingPrice: product.sellingPrice.toString(),
     stock: product.stock,
+    soldCount: soldCounts.get(product.id) ?? 0,
     status: product.status,
     isAvailable: hasActiveSource && product.status === "ACTIVE",
     category: product.category,

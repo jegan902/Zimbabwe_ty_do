@@ -1,5 +1,6 @@
 import { getCategories, getProducts } from "@/lib/services/catalog.service";
 import { ProductGrid } from "@/components/portal/product-grid";
+import { CatalogRealtime } from "@/components/portal/catalog-realtime";
 import Link from "next/link";
 import { Search, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ export default async function ProductsPage({
 
   return (
     <div className="container mx-auto px-4 py-8 sm:px-8 space-y-6">
+      <CatalogRealtime />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black">Danh sách sản phẩm</h1>

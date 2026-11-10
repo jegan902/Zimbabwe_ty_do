@@ -7,6 +7,7 @@ export interface UserProfile {
   email: string;
   username: string;
   fullName: string | null;
+  phone?: string | null;
   role: "USER" | "ADMIN" | "SUPERADMIN";
   status: string;
 }

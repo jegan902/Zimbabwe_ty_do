@@ -17,7 +17,7 @@ export type RealtimeEvent =
   | { type: "supplier.balance"; supplierId: string; payload?: Record<string, unknown> }
   | { type: "sync.status"; supplierId: string; payload?: Record<string, unknown> };
 
-class RealtimeBus {
+export class RealtimeBus {
   private emitter = new EventEmitter();
 
   constructor() {

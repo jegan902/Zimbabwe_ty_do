@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BuyModal } from "@/components/portal/buy-modal";
-import { ShoppingCart, Eye, Tag, CheckCircle2 } from "lucide-react";
+import { ShoppingCart, Eye, Tag, Package, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +15,7 @@ export interface ProductItem {
   image: string | null;
   sellingPrice: string;
   stock: number | null;
+  soldCount?: number;
   status: string;
   isFeatured: boolean;
   category: {
@@ -22,6 +23,11 @@ export interface ProductItem {
     name: string;
     slug: string;
   } | null;
+}
+
+function formatStock(stock: number | null): string {
+  if (stock === null) return "Liên hệ";
+  return stock.toLocaleString("vi-VN");
 }
 
 export function ProductGrid({ initialProducts }: { initialProducts: ProductItem[] }) {
@@ -39,7 +45,8 @@ export function ProductGrid({ initialProducts }: { initialProducts: ProductItem[
         <Tag className="mx-auto h-12 w-12 stroke-[1.5] text-muted-foreground/60 mb-3" />
         <h3 className="text-base font-semibold text-foreground">Chưa có sản phẩm nào</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Hệ thống đang đồng bộ dữ liệu từ các nhà cung cấp. Vui lòng quay lại sau!
+          Catalog đang trống. Admin hãy đồng bộ nhà cung cấp (hoặc chạy{" "}
+          <code className="rounded bg-muted px-1">npm run db:sync</code>) rồi tải lại trang.
         </p>
       </div>
     );
@@ -85,9 +92,24 @@ export function ProductGrid({ initialProducts }: { initialProducts: ProductItem[
                   <h3 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem]">{p.name}</h3>
                 </Link>
 
-                <p className="text-xs text-muted-foreground line-clamp-2 mt-1 mb-4 flex-1">
+                <p className="text-xs text-muted-foreground line-clamp-2 mt-1 mb-3 flex-1">
                   {p.description || "Tài khoản số bàn giao tự động chất lượng cao"}
                 </p>
+
+                <div className="mb-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1" title="Tồn kho">
+                    <Package className="h-3.5 w-3.5" />
+                    Còn:{" "}
+                    <span className="font-semibold text-foreground">{formatStock(p.stock)}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1" title="Đã bán">
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    Đã bán:{" "}
+                    <span className="font-semibold text-foreground">
+                      {(p.soldCount ?? 0).toLocaleString("vi-VN")}
+                    </span>
+                  </span>
+                </div>
 
                 <div className="border-t pt-3 flex items-center justify-between mt-auto">
                   <div>

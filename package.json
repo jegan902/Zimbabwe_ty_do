@@ -6,7 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx --tsconfig tsconfig.json prisma/seed.ts",
+    "db:sync": "tsx --tsconfig tsconfig.json scripts/sync-suppliers.ts",
+    "db:setup": "prisma migrate deploy && npm run db:seed",
+    "worker:sync": "tsx --tsconfig tsconfig.json scripts/sync-worker.ts",
+    "postinstall": "prisma generate"
+  },
+  "prisma": {
+    "seed": "tsx --tsconfig tsconfig.json prisma/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -46,10 +55,12 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
     "postcss": "^8.5.32",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
   }

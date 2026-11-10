@@ -15,6 +15,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
     walletAggregates,
     supplierBalances,
     recentOrders,
+    primarySupplier,
   ] = await Promise.all([
     prisma.order.aggregate({
       where: { status: "SUCCESS" },
@@ -51,11 +52,55 @@ export const GET = apiRoute(async (request: NextRequest) => {
         product: { select: { name: true } },
       },
     }),
+    prisma.supplier.findFirst({
+      where: { status: "ACTIVE" },
+      include: { balance: true },
+      orderBy: { priority: "asc" },
+    }),
   ]);
+
+  let supplierAccount = null;
+  if (primarySupplier) {
+    const profileLog = await prisma.supplierApiLog.findFirst({
+      where: {
+        supplierId: primarySupplier.id,
+        endpoint: { contains: "profile" },
+        success: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    let username: string | undefined = undefined;
+    let liveBalance: string | undefined = undefined;
+
+    if (profileLog?.responseData) {
+      try {
+        const parsed = JSON.parse(profileLog.responseData);
+        const data = parsed.data || parsed;
+        username = data.username || data.name || data.user;
+        liveBalance = data.money || data.balance || data.sodu;
+      } catch {}
+    }
+
+    supplierAccount = {
+      id: primarySupplier.id,
+      name: primarySupplier.name,
+      username: username || "Chưa xác định",
+      baseUrl: primarySupplier.baseUrl,
+      connectionStatus: primarySupplier.connectionStatus,
+      connectionError: primarySupplier.connectionError,
+      lastCheckedAt: primarySupplier.lastCheckedAt,
+      balance: primarySupplier.balance?.balance.toString() || "0",
+      liveBalance: liveBalance || primarySupplier.balance?.balance.toString() || "0",
+      balanceType: primarySupplier.balance?.balanceType || "ESTIMATED",
+      alertThreshold: primarySupplier.balance?.alertThreshold.toString() || "50000",
+    };
+  }
 
   const countsMap = new Map(orderCounts.map((c) => [c.status, c._count.id]));
 
   return successResponse({
+    supplierAccount,
     metrics: {
       totalRevenue: orderAggregates._sum.totalAmount ? orderAggregates._sum.totalAmount.toString() : "0",
       totalProfit: orderAggregates._sum.profit ? orderAggregates._sum.profit.toString() : "0",

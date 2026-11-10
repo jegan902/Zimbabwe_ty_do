@@ -172,6 +172,7 @@ export async function supplierRequest(
         attempt += 1;
         continue;
       }
+      break;
     }
   }
 

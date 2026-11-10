@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 export default function AdminDashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [syncingSupplier, setSyncingSupplier] = useState(false);
 
   useEffect(() => {
     async function fetchOverview() {
@@ -47,6 +48,27 @@ export default function AdminDashboardPage() {
 
   const metrics = data?.metrics || {};
   const recentOrders = data?.recentOrders || [];
+  const supplierAccount = data?.supplierAccount;
+
+  const handleSyncLiveBalance = async () => {
+    if (!supplierAccount?.id) return;
+    setSyncingSupplier(true);
+    try {
+      const res = await fetch(`/api/admin/suppliers/${supplierAccount.id}/test-connection`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Kiểm tra thất bại");
+      // Re-fetch overview
+      const overviewRes = await fetch("/api/admin/overview");
+      const overviewJson = await overviewRes.json();
+      if (overviewRes.ok) setData(overviewJson.data);
+    } catch {
+      // Ignored
+    } finally {
+      setSyncingSupplier(false);
+    }
+  };
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -103,6 +125,100 @@ export default function AdminDashboardPage() {
           <p className="text-[11px] text-muted-foreground">Tổng nghĩa vụ nợ phải trả khách</p>
         </div>
       </div>
+
+      {/* Intermediary Supplier Account Card */}
+      {supplierAccount && (
+        <div className="rounded-2xl border bg-gradient-to-r from-card via-card to-primary/5 p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shadow-inner">
+                <Truck className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-base">Tài Khoản Trung Gian Nhà Cung Cấp</h3>
+                  <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
+                    {supplierAccount.name}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Tài khoản dùng API Key để tự động mua tài khoản số khi khách hàng đặt mua.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={supplierAccount.connectionStatus === "CONNECTED" ? "default" : "destructive"}
+                className="text-xs font-semibold px-2.5 py-0.5"
+              >
+                {supplierAccount.connectionStatus === "CONNECTED" ? "🟢 API Hoạt động" : "🔴 Mất kết nối API"}
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncLiveBalance}
+                disabled={syncingSupplier}
+                className="h-8 text-xs font-bold gap-1.5"
+              >
+                {syncingSupplier ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                )}
+                Lấy số dư thực tế
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
+            <div className="rounded-xl bg-background/80 p-3.5 border shadow-sm">
+              <span className="text-muted-foreground block text-[11px] font-medium">Tên tài khoản tại NCC</span>
+              <span className="font-mono font-black text-base text-primary mt-1 block">
+                {supplierAccount.username}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-0.5 block truncate">
+                {supplierAccount.baseUrl}
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-background/80 p-3.5 border shadow-sm">
+              <span className="text-muted-foreground block text-[11px] font-medium">Số dư thực tế tại NCC (Live)</span>
+              <span className="font-black text-base text-foreground mt-1 block">
+                {Number(supplierAccount.liveBalance || 0).toLocaleString("vi-VN")}đ
+              </span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5 block">
+                {Number(supplierAccount.liveBalance || 0) <= 0 ? "⚠️ Hết số dư vốn tại NCC" : "Khả dụng mua hàng"}
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-background/80 p-3.5 border shadow-sm">
+              <span className="text-muted-foreground block text-[11px] font-medium">Ngưỡng cảnh báo vốn thấp</span>
+              <span className="font-black text-base text-amber-600 mt-1 block">
+                {Number(supplierAccount.alertThreshold || 0).toLocaleString("vi-VN")}đ
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                Gửi email tự động khi dưới ngưỡng
+              </span>
+            </div>
+
+            <div className="rounded-xl bg-background/80 p-3.5 border shadow-sm">
+              <span className="text-muted-foreground block text-[11px] font-medium">Kiểm tra kết nối gần nhất</span>
+              <span className="font-bold text-xs mt-1 block">
+                {supplierAccount.lastCheckedAt
+                  ? new Date(supplierAccount.lastCheckedAt).toLocaleString("vi-VN")
+                  : "Chưa kiểm tra"}
+              </span>
+              <Link
+                href="/admin/suppliers"
+                className="text-[10px] text-primary hover:underline font-semibold mt-1 inline-flex items-center gap-0.5"
+              >
+                Cài đặt chi tiết NCC &rarr;
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Operational Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Truck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Play, Loader2, DollarSign, Settings, KeyRound } from "lucide-react";
+import { Truck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Play, Loader2, DollarSign, Settings, KeyRound, Plus, Trash2, Power, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -10,8 +10,19 @@ import { toast } from "sonner";
 
 export default function AdminSuppliersPage() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [availableAdapters, setAvailableAdapters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Create Supplier modal
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newAdapterKey, setNewAdapterKey] = useState("quangvinh");
+  const [newBaseUrl, setNewBaseUrl] = useState("https://quangvinhmedia.store/api");
+  const [newApiKey, setNewApiKey] = useState("");
+  const [newProfitType, setNewProfitType] = useState<"PERCENTAGE" | "FIXED">("PERCENTAGE");
+  const [newProfitValue, setNewProfitValue] = useState("10");
+  const [newAlertThreshold, setNewAlertThreshold] = useState("50000");
 
   // Edit balance modal
   const [editingSupplier, setEditingSupplier] = useState<any>(null);
@@ -23,13 +34,21 @@ export default function AdminSuppliersPage() {
   const [editApiKey, setEditApiKey] = useState("");
   const [editBaseUrl, setEditBaseUrl] = useState("");
   const [editProfitValue, setEditProfitValue] = useState("");
+  const [editAdapterKey, setEditAdapterKey] = useState("quangvinh");
 
   const fetchSuppliers = async () => {
     try {
       const res = await fetch("/api/admin/suppliers");
       const json = await res.json();
       if (res.ok) {
-        setSuppliers(json.data || []);
+        if (Array.isArray(json.data)) {
+          setSuppliers(json.data);
+        } else if (json.data?.suppliers) {
+          setSuppliers(json.data.suppliers);
+          if (json.data.availableAdapters) {
+            setAvailableAdapters(json.data.availableAdapters);
+          }
+        }
       }
     } catch {
       // Ignored
@@ -50,7 +69,7 @@ export default function AdminSuppliersPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error?.message || "Kiểm tra kết nối thất bại");
+        throw new Error(json.message || json.error?.message || json.error || "Kiểm tra kết nối thất bại");
       }
       toast.success("Kết nối thành công tới nhà cung cấp!");
       fetchSuppliers();
@@ -69,7 +88,7 @@ export default function AdminSuppliersPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error?.message || "Đồng bộ thất bại");
+        throw new Error(json.message || json.error?.message || json.error || "Đồng bộ thất bại");
       }
       toast.success(
         `Đồng bộ hoàn tất! ${json.data.newProducts} mới, ${json.data.updatedProducts} cập nhật, ${json.data.priceChangedProducts} đổi giá.`
@@ -117,13 +136,107 @@ export default function AdminSuppliersPage() {
           apiKey: editApiKey.trim() || undefined,
           baseUrl: editBaseUrl.trim() || undefined,
           profitValue: editProfitValue ? Number(editProfitValue) : undefined,
+          adapterKey: editAdapterKey || undefined,
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message || "Cập nhật thất bại");
+      if (!res.ok) throw new Error(json.message || json.error?.message || "Cập nhật thất bại");
       toast.success("Đã cập nhật API Key & cấu hình nhà cung cấp thành công!");
       setConfigSupplier(null);
       setEditApiKey("");
+      fetchSuppliers();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCreateSupplier = async () => {
+    if (!newName.trim() || !newBaseUrl.trim() || !newApiKey.trim()) {
+      toast.error("Vui lòng điền đầy đủ Tên, Base URL và API Key");
+      return;
+    }
+    setActionLoading("create-supplier");
+    try {
+      const res = await fetch("/api/admin/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName.trim(),
+          adapterKey: newAdapterKey,
+          baseUrl: newBaseUrl.trim(),
+          apiKey: newApiKey.trim(),
+          profitType: newProfitType,
+          profitValue: Number(newProfitValue) || 10,
+          alertThreshold: Number(newAlertThreshold) || 50000,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error?.message || "Thêm nhà cung cấp thất bại");
+      toast.success(`Đã thêm nhà cung cấp "${newName}" thành công!`);
+      setCreateModalOpen(false);
+      setNewName("");
+      setNewApiKey("");
+      fetchSuppliers();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteSupplier = async (supplierId: string, supplierName: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa hoặc vô hiệu hóa nhà cung cấp "${supplierName}"?`)) return;
+    setActionLoading(`delete-${supplierId}`);
+    try {
+      const res = await fetch(`/api/admin/suppliers/${supplierId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error?.message || "Thao tác thất bại");
+      toast.success(json.message || "Đã xóa nhà cung cấp thành công!");
+      fetchSuppliers();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleStatus = async (supplier: any) => {
+    const isStopping = supplier.status === "ACTIVE";
+    const nextStatus = isStopping ? "INACTIVE" : "ACTIVE";
+
+    if (
+      isStopping &&
+      !confirm(
+        `Bạn có chắc chắn muốn NGỪNG BÁN toàn bộ sản phẩm của "${supplier.name}"?\n\nToàn bộ sản phẩm thuộc nhà cung cấp này sẽ bị ẨN khỏi trang bán hàng và khách hàng không thể tìm kiếm hay mua được nữa.`
+      )
+    ) {
+      return;
+    }
+
+    setActionLoading(`toggle-${supplier.id}`);
+    try {
+      const res = await fetch(`/api/admin/suppliers/${supplier.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error?.message || "Cập nhật trạng thái thất bại");
+      if (nextStatus === "INACTIVE") {
+        toast.warning(
+          `Đã NGỪNG BÁN "${supplier.name}". Toàn bộ sản phẩm của nhà cung cấp này đã được ẨN khỏi trang bán hàng!`,
+          { duration: 4000 }
+        );
+      } else {
+        toast.success(
+          `Đã MỞ BÁN LẠI "${supplier.name}". Sản phẩm đã được hiển thị trở lại trên trang bán hàng!`,
+          { duration: 4000 }
+        );
+      }
       fetchSuppliers();
     } catch (err: any) {
       toast.error(err.message);
@@ -142,16 +255,29 @@ export default function AdminSuppliersPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-black">Quản lý Nhà Cung Cấp & Vốn</h1>
-        <p className="text-xs text-muted-foreground mt-1">
-          Theo dõi kết nối API, cập nhật vốn nạp trước và kiểm tra trạng thái từng nhà cung cấp.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black">Quản lý Nhà Cung Cấp & Vốn</h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Mở rộng kết nối đa nhà cung cấp số, theo dõi kết nối API và hạn mức vốn nạp trước.
+          </p>
+        </div>
+
+        <Button
+          onClick={() => {
+            setNewName("");
+            setNewApiKey("");
+            setCreateModalOpen(true);
+          }}
+          className="font-bold text-xs gap-1.5 shadow-sm"
+        >
+          <Plus className="h-4 w-4" /> Thêm nhà cung cấp mới
+        </Button>
       </div>
 
       <div className="space-y-6">
         {suppliers.map((s) => {
-          const intermediaryUser = s.accountProfile?.username || "dinhminh4424";
+          const intermediaryUser = s.accountProfile?.username || "Unknows";
           const liveBal = s.accountProfile?.balance ?? s.balance?.balance ?? "0";
           const isConnected = s.connectionStatus === "CONNECTED";
 
@@ -169,6 +295,15 @@ export default function AdminSuppliersPage() {
                       <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary">
                         Adapter: {s.adapterKey}
                       </Badge>
+                      {s.status === "ACTIVE" ? (
+                        <Badge className="bg-emerald-600 text-white font-bold text-[10px]">
+                          🟢 Đang bán
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive" className="font-bold text-[10px]">
+                          🔴 ĐÃ NGỪNG BÁN (ẨN KHỎI WEB)
+                        </Badge>
+                      )}
                       <Badge
                         variant={isConnected ? "default" : s.connectionStatus === "ERROR" ? "destructive" : "secondary"}
                         className="text-[11px] font-semibold"
@@ -314,11 +449,43 @@ export default function AdminSuppliersPage() {
                     setConfigSupplier(s);
                     setEditBaseUrl(s.baseUrl || "");
                     setEditProfitValue(s.profitValue || "10");
+                    setEditAdapterKey(s.adapterKey || "quangvinh");
                     setEditApiKey("");
                   }}
                   className="h-8 text-xs font-semibold gap-1.5"
                 >
                   <Settings className="h-3.5 w-3.5" /> Cài đặt API Key & NCC
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleToggleStatus(s)}
+                  disabled={actionLoading === `toggle-${s.id}`}
+                  className={`h-8 text-xs font-semibold gap-1.5 ${
+                    s.status === "ACTIVE"
+                      ? "text-destructive border-destructive/30 hover:bg-destructive/10 font-bold"
+                      : "text-emerald-600 border-emerald-500/30 hover:bg-emerald-50 font-bold"
+                  }`}
+                  title={
+                    s.status === "ACTIVE"
+                      ? "Ngừng bán và ẩn toàn bộ sản phẩm của nhà cung cấp này khỏi trang web"
+                      : "Mở bán lại và hiển thị sản phẩm trên trang web"
+                  }
+                >
+                  {actionLoading === `toggle-${s.id}` ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : s.status === "ACTIVE" ? (
+                    <>
+                      <EyeOff className="h-3.5 w-3.5" />
+                      Ngừng bán (Ẩn khỏi web)
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-3.5 w-3.5" />
+                      Mở bán lại (Hiện lên web)
+                    </>
+                  )}
                 </Button>
 
                 <Button
@@ -348,6 +515,17 @@ export default function AdminSuppliersPage() {
                     <Play className="h-3.5 w-3.5" />
                   )}
                   Đồng bộ sản phẩm ngay
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeleteSupplier(s.id, s.name)}
+                  disabled={actionLoading === `delete-${s.id}`}
+                  className="h-8 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2"
+                  title="Xóa hoặc vô hiệu hóa nhà cung cấp"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
@@ -434,6 +612,28 @@ export default function AdminSuppliersPage() {
               </div>
 
               <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">Loại Adapter kết nối</label>
+                <select
+                  value={editAdapterKey}
+                  onChange={(e) => setEditAdapterKey(e.target.value)}
+                  className="w-full h-9 rounded-lg border bg-background px-3 text-xs font-semibold"
+                >
+                  {availableAdapters.length > 0 ? (
+                    availableAdapters.map((a: any) => (
+                      <option key={a.key} value={a.key}>
+                        {a.name} ({a.key})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="quangvinh">Quang Vinh Media API (quangvinh)</option>
+                      <option value="taphoammo">Tạp Hóa MMO / REST JSON API (taphoammo)</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
                 <label className="font-semibold text-muted-foreground">API Base URL</label>
                 <Input
                   type="text"
@@ -466,6 +666,144 @@ export default function AdminSuppliersPage() {
               <Button onClick={handleSaveConfig} disabled={actionLoading === "save-config"}>
                 {actionLoading === "save-config" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Lưu cấu hình
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Create Supplier Dialog */}
+      {createModalOpen && (
+        <Dialog open={true} onOpenChange={() => setCreateModalOpen(false)}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Truck className="h-5 w-5 text-primary" />
+                Thêm Nhà Cung Cấp Mới
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Mở rộng kết nối tới nhà cung cấp số mới để đồng bộ sản phẩm và tự động đặt hàng.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2 text-xs">
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">Tên nhà cung cấp *</label>
+                <Input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Ví dụ: Tạp Hóa MMO, Chợ Số 247..."
+                  className="h-9 text-xs font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">Loại Adapter kết nối *</label>
+                <select
+                  value={newAdapterKey}
+                  onChange={(e) => {
+                    const selected = e.target.value;
+                    setNewAdapterKey(selected);
+                    const found = availableAdapters.find((a: any) => a.key === selected);
+                    if (found?.defaultBaseUrl) {
+                      setNewBaseUrl(found.defaultBaseUrl);
+                    }
+                  }}
+                  className="w-full h-9 rounded-lg border bg-background px-3 text-xs font-semibold"
+                >
+                  {availableAdapters.length > 0 ? (
+                    availableAdapters.map((a: any) => (
+                      <option key={a.key} value={a.key}>
+                        {a.name} ({a.key})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="taphoammo">Tạp Hóa MMO / REST JSON API (taphoammo)</option>
+                      <option value="quangvinh">Quang Vinh Media API (quangvinh)</option>
+                    </>
+                  )}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Mỗi nhà cung cấp sử dụng một adapter chuẩn hóa dữ liệu tài khoản, danh mục và đơn hàng.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">API Base URL *</label>
+                <Input
+                  type="text"
+                  required
+                  value={newBaseUrl}
+                  onChange={(e) => setNewBaseUrl(e.target.value)}
+                  placeholder="https://taphoammo.net/api"
+                  className="h-9 font-mono text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">API Key của bạn tại nhà cung cấp *</label>
+                <Input
+                  type="password"
+                  required
+                  value={newApiKey}
+                  onChange={(e) => setNewApiKey(e.target.value)}
+                  placeholder="Nhập API Key cung cấp bởi đối tác..."
+                  className="h-9 font-mono text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Khóa API được mã hóa an toàn bằng AES-256 trước khi lưu.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-muted-foreground">Loại lợi nhuận</label>
+                  <select
+                    value={newProfitType}
+                    onChange={(e) => setNewProfitType(e.target.value as any)}
+                    className="w-full h-9 rounded-lg border bg-background px-3 text-xs font-semibold"
+                  >
+                    <option value="PERCENTAGE">Phần trăm (%)</option>
+                    <option value="FIXED">Số tiền cố định (VNĐ)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-muted-foreground">
+                    Giá trị lợi nhuận ({newProfitType === "PERCENTAGE" ? "%" : "VNĐ"})
+                  </label>
+                  <Input
+                    type="number"
+                    value={newProfitValue}
+                    onChange={(e) => setNewProfitValue(e.target.value)}
+                    placeholder="10"
+                    className="h-9 font-bold text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-muted-foreground">Ngưỡng cảnh báo số dư vốn thấp (VNĐ)</label>
+                <Input
+                  type="number"
+                  value={newAlertThreshold}
+                  onChange={(e) => setNewAlertThreshold(e.target.value)}
+                  placeholder="50000"
+                  className="h-9 font-bold text-xs"
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateModalOpen(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleCreateSupplier} disabled={actionLoading === "create-supplier"}>
+                {actionLoading === "create-supplier" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Tạo Nhà Cung Cấp
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -39,6 +39,7 @@ export function Footer() {
         <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-muted-foreground gap-4">
           <p>© {new Date().getFullYear()} DIGISHOP Multi-Supplier Marketplace. Hệ thống phân phối sản phẩm số tự động.</p>
           <div className="flex items-center gap-6">
+            <Link href="/api-docs" className="text-primary font-semibold hover:underline">Tài liệu API</Link>
             <Link href="/" className="hover:underline">Điều khoản dịch vụ</Link>
             <Link href="/" className="hover:underline">Chính sách bảo mật</Link>
             <Link href="/" className="hover:underline">Hướng dẫn mua hàng</Link>

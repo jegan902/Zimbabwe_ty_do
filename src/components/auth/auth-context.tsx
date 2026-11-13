@@ -5,11 +5,11 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 export interface UserProfile {
   id: string;
   email: string;
-  username: string;
   fullName: string | null;
-  phone?: string | null;
   role: "USER" | "ADMIN" | "SUPERADMIN";
   status: string;
+  username?: string;
+  phone?: string | null;
 }
 
 export interface WalletInfo {

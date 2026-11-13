@@ -83,6 +83,17 @@ export async function checkoutDirect(input: CheckoutInput) {
     if (!liveProd.isActive) {
       throw new ConflictError("Sản phẩm tạm thời không khả dụng tại nhà cung cấp");
     }
+    if (liveProd.raw && typeof liveProd.raw === "object") {
+      const rawProd = liveProd.raw as Record<string, any>;
+      const minQty = typeof rawProd.min === "number" ? rawProd.min : (Number(rawProd.min) || null);
+      if (minQty && quantity < minQty) {
+        throw new ConflictError(`Số lượng mua tối thiểu cho sản phẩm này tại nhà cung cấp là ${minQty}`);
+      }
+      const maxQty = typeof rawProd.max === "number" ? rawProd.max : (Number(rawProd.max) || null);
+      if (maxQty && quantity > maxQty) {
+        throw new ConflictError(`Số lượng mua tối đa cho sản phẩm này tại nhà cung cấp là ${maxQty}`);
+      }
+    }
     currentCost = d(liveProd.cost);
   } catch (err) {
     if (err instanceof ConflictError) throw err;

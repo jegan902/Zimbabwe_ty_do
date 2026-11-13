@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 /**
  * Subscribes to /api/realtime and refreshes the page when supplier sync finishes
@@ -18,6 +19,10 @@ export function CatalogRealtime() {
         const data = JSON.parse(event.data) as { type?: string };
         if (data.type === "product.synced" || data.type === "product.updated") {
           router.refresh();
+          // toast.info("Dữ liệu sản phẩm & giá vừa được cập nhật tự động!", {
+          //   id: "realtime-catalog-refresh",
+          //   duration: 3000,
+          // });
         }
       } catch {
         // ignore malformed frames

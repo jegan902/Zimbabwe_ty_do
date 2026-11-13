@@ -20,6 +20,7 @@ import {
   KeyRound,
   ExternalLink,
   Coins,
+  Code2,
 } from "lucide-react";
 
 function AccountContent() {
@@ -35,7 +36,6 @@ function AccountContent() {
 
   // Profile Form state
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
 
   // Password Form state
@@ -47,7 +47,6 @@ function AccountContent() {
   useEffect(() => {
     if (user) {
       setFullName(user.fullName || "");
-      setPhone(user.phone || "");
     }
   }, [user]);
 
@@ -92,7 +91,7 @@ function AccountContent() {
       const res = await fetch("/api/auth/me", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, phone }),
+        body: JSON.stringify({ fullName }),
       });
 
       const data = await res.json();
@@ -163,7 +162,7 @@ function AccountContent() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">{user.fullName || user.username}</h1>
+              <h1 className="text-xl font-bold">{user.fullName || user.email}</h1>
               <span className="rounded-full bg-primary/10 text-primary text-[11px] font-semibold px-2 py-0.5">
                 {user.role}
               </span>
@@ -223,6 +222,17 @@ function AccountContent() {
             <Wallet className="h-4 w-4" /> Ví & Giao dịch
           </button>
 
+          <Link
+            href="/api-docs"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 transition-all border border-sky-500/20 bg-sky-500/5 mt-2"
+          >
+            <div className="flex items-center gap-3">
+              <Code2 className="h-4 w-4" />
+              <span>Tài liệu API</span>
+            </div>
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+
           <div className="pt-4 border-t mt-4">
             <button
               onClick={logout}
@@ -262,19 +272,6 @@ function AccountContent() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground">Tên đăng nhập (Username)</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      value={user.username}
-                      disabled
-                      className="pl-9 h-10 text-sm bg-muted/40 cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground">Họ và tên</label>
                   <Input
                     type="text"
@@ -283,20 +280,6 @@ function AccountContent() {
                     onChange={(e) => setFullName(e.target.value)}
                     className="h-10 text-sm"
                   />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground">Số điện thoại</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="tel"
-                      placeholder="0912345678"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-9 h-10 text-sm"
-                    />
-                  </div>
                 </div>
 
                 <Button type="submit" disabled={savingProfile} className="font-bold shadow-md">

@@ -4,6 +4,7 @@ import { decryptSecret } from "./http";
 import { SupplierUnavailableError } from "@/lib/utils/errors";
 import type { AdapterContext, SupplierAdapter } from "./supplier.interface";
 import { quangVinhAdapter } from "./adapters/quangvinh.adapter";
+import { tapHoaMmoAdapter } from "./adapters/taphoammo.adapter";
 
 /**
  * Adapter registry.
@@ -15,7 +16,36 @@ import { quangVinhAdapter } from "./adapters/quangvinh.adapter";
 
 const ADAPTERS: Record<string, SupplierAdapter> = {
   [quangVinhAdapter.key]: quangVinhAdapter,
+  [tapHoaMmoAdapter.key]: tapHoaMmoAdapter,
 };
+
+export interface AdapterInfo {
+  key: string;
+  name: string;
+  description: string;
+  defaultBaseUrl: string;
+  supportsBalance: boolean;
+  supportsStock: boolean;
+}
+
+export const AVAILABLE_ADAPTERS: AdapterInfo[] = [
+  {
+    key: "quangvinh",
+    name: "Quang Vinh Media API (PHP/Form-data)",
+    description: "Adapter tích hợp nền tảng Quang Vinh Media / ShopFB2027",
+    defaultBaseUrl: "https://quangvinhmedia.store/api",
+    supportsBalance: true,
+    supportsStock: true,
+  },
+  {
+    key: "taphoammo",
+    name: "Tạp Hóa MMO / REST JSON API",
+    description: "Adapter chuẩn REST API cho nền tảng Tạp Hóa MMO & Chợ số",
+    defaultBaseUrl: "https://taphoammo.net/api",
+    supportsBalance: true,
+    supportsStock: true,
+  },
+];
 
 export function listAdapterKeys(): string[] {
   return Object.keys(ADAPTERS);

@@ -4,6 +4,7 @@ import { AuthProvider } from "@/components/auth/auth-context";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "@/components/ui/sonner";
+import { CatalogRealtime } from "@/components/portal/catalog-realtime";
 
 export const metadata: Metadata = {
   title: "DIGISHOP - Nền tảng Tài Khoản Số Đa Nhà Cung Cấp Tự Động",
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="vi" className="h-full antialiased font-sans">
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <AuthProvider>
+          <CatalogRealtime />
           <Header />
           <main className="flex-1">{children}</main>
           <Footer />

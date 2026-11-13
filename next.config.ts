@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     cpus: 1,
   },
   // Native / server-only modules must never be bundled into the client graph.
-  serverExternalPackages: [],
+  serverExternalPackages: ["pino", "pino-pretty"],
 
   poweredByHeader: false,
 

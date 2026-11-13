@@ -15,7 +15,9 @@ function clientIp(request: NextRequest): string {
 
 export const POST = apiRoute(async (request) => {
   const ipAddress = clientIp(request);
-  await consumeRateLimit("auth-register", ipAddress, 5, 60 * 60);
+  if (process.env.NODE_ENV !== "development") {
+    await consumeRateLimit("auth-register", ipAddress, 10, 60 * 60);
+  }
 
   let body: unknown;
   try {
@@ -35,9 +37,6 @@ export const POST = apiRoute(async (request) => {
   const user = await prisma.user.create({
     data: {
       email: input.email,
-      // Email is the canonical login identifier; the separate schema field is
-      // retained for compatibility with the existing model.
-      username: input.email,
       passwordHash,
       wallet: { create: {} },
       auditLogs: {
@@ -47,11 +46,9 @@ export const POST = apiRoute(async (request) => {
     select: {
       id: true,
       email: true,
-      username: true,
       role: true,
       status: true,
       fullName: true,
-      avatar: true,
     },
   });
 

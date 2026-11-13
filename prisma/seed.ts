@@ -14,9 +14,15 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding database...");
 
+  // const baseUrl =
+  //   process.env.SUPPLIER_QUANGVINH_BASE_URL || "https://quangvinhmedia.store/api";
+  // const quangVinhApiKey = process.env.SUPPLIER_QUANGVINH_API_KEY;
+
   const baseUrl =
-    process.env.SUPPLIER_QUANGVINH_BASE_URL || "https://quangvinhmedia.store/api";
-  const quangVinhApiKey = process.env.SUPPLIER_QUANGVINH_API_KEY;
+    process.env.SUPPLIER_SHOPFB2027_BASE_URL || "https://quangvinhmedia.store/api";
+  const quangVinhApiKey = process.env.SUPPLIER_SHOPFB2027_API_KEY;
+
+
   if (!quangVinhApiKey) {
     throw new Error(
       "Missing SUPPLIER_QUANGVINH_API_KEY in .env — required to mirror supplier catalog"
@@ -95,7 +101,6 @@ async function main() {
     const admin = await prisma.user.create({
       data: {
         email: adminEmail,
-        username: "admin",
         passwordHash,
         role: "ADMIN",
         status: "ACTIVE",

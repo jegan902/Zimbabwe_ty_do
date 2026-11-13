@@ -48,7 +48,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
       take: 10,
       orderBy: { createdAt: "desc" },
       include: {
-        user: { select: { email: true, username: true } },
+        user: { select: { email: true, fullName: true } },
         product: { select: { name: true } },
       },
     }),

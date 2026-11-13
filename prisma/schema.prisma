@@ -26,11 +26,8 @@ enum UserStatus {
 model User {
   id               String     @id @default(cuid())
   email            String     @unique
-  username         String     @unique
   passwordHash     String
   fullName         String?
-  phone            String?
-  avatar           String?
   role             UserRole   @default(USER)
   status           UserStatus @default(ACTIVE)
   emailVerifiedAt  DateTime?
@@ -39,6 +36,9 @@ model User {
   lastLoginAt      DateTime?
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+
+  apiKey           String?    @unique
+  ipWhitelist      String?
 
   wallet             Wallet?
   orders             Order[]
@@ -49,10 +49,10 @@ model User {
   paymentTxns        PaymentTransaction[]
 
   @@index([email])
-  @@index([username])
   @@index([status])
   @@index([role])
   @@index([createdAt])
+  @@index([apiKey])
 }
 
 model Session {

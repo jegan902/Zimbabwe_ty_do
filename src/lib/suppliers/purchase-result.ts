@@ -55,15 +55,31 @@ export function classifyPurchaseResponse(
 ): PurchaseOutcome {
   // Definitive client-side rejections: no order can have been created.
   if (status === 400 || status === 401 || status === 403 || status === 422) {
+    const { json, isJson } = decode(text);
+    let message =
+      status === 401
+        ? "Nhà cung cấp từ chối API key"
+        : "Nhà cung cấp từ chối yêu cầu mua hàng";
+
+    if (isJson && json && typeof json === "object") {
+      const explicitMsg = pickString(asRecord(json), [
+        "msg",
+        "message",
+        "error",
+        "reason",
+        "description",
+      ]);
+      if (explicitMsg) {
+        message = explicitMsg;
+      }
+    }
+
     return {
       status: "FAILED",
       errorCode: `SUPPLIER_HTTP_${status}`,
-      message:
-        status === 401
-          ? "Nhà cung cấp từ chối API key"
-          : "Nhà cung cấp từ chối yêu cầu mua hàng",
+      message,
       definitive: true,
-      raw: { status },
+      raw: { status, text: text.slice(0, 500) },
     };
   }
 

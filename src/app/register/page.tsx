@@ -29,8 +29,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (password.length < 10) {
-      toast.error("Mật khẩu phải từ 10 ký tự trở lên để đảm bảo an toàn");
+    if (password.length < 6) {
+      toast.error("Mật khẩu phải từ 6 ký tự trở lên");
       return;
     }
 
@@ -39,12 +39,18 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, confirmPassword }),
+        body: JSON.stringify({ email: email.trim(), password, confirmPassword }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message || "Đăng ký thất bại");
+        const errorMsg =
+          (Array.isArray(data.details) && data.details[0]?.message) ||
+          data.message ||
+          (typeof data.error === "object" ? data.error?.message : null) ||
+          data.error ||
+          "Đăng ký thất bại";
+        throw new Error(errorMsg);
       }
 
       toast.success("Tạo tài khoản thành công! Tự động đăng nhập...");
@@ -84,7 +90,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">Mật khẩu (tối thiểu 10 ký tự)</label>
+            <label className="text-xs font-semibold text-muted-foreground">Mật khẩu (tối thiểu 6 ký tự)</label>
             <div className="relative">
               <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input

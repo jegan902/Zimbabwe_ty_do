@@ -67,7 +67,6 @@ describe("POST /api/auth/register", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           email: "person@example.com",
-          username: "person@example.com",
           passwordHash: "argon2-hash",
           wallet: { create: {} },
         }),

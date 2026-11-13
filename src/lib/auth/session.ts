@@ -78,20 +78,20 @@ export async function revokeUserSessions(userId: string, keepRawToken?: string) 
 function toAuthUser(user: {
   id: string;
   email: string;
-  username: string;
   role: UserRole;
   status: string;
   fullName: string | null;
-  avatar: string | null;
+  username?: string;
+  avatar?: string | null;
 }): AuthUser {
   return {
     id: user.id,
     email: user.email,
-    username: user.username,
+    username: user.email,
     role: user.role,
     status: user.status as AuthUser["status"],
     fullName: user.fullName,
-    avatar: user.avatar,
+    avatar: null,
   };
 }
 
@@ -113,11 +113,9 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
         select: {
           id: true,
           email: true,
-          username: true,
           role: true,
           status: true,
           fullName: true,
-          avatar: true,
         },
       },
     },
@@ -156,11 +154,9 @@ export async function getUserFromRequest(request: NextRequest): Promise<AuthUser
         select: {
           id: true,
           email: true,
-          username: true,
           role: true,
           status: true,
           fullName: true,
-          avatar: true,
         },
       },
     },

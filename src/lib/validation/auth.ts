@@ -4,13 +4,13 @@ const email = z
   .string()
   .trim()
   .toLowerCase()
-  .max(254, 'Email is too long')
-  .email('Email is not valid');
+  .max(254, 'Email quá dài')
+  .email('Email không đúng định dạng hợp lệ');
 
 const newPassword = z
   .string()
-  .min(10, 'Password must be at least 10 characters')
-  .max(128, 'Password must be at most 128 characters');
+  .min(6, 'Mật khẩu phải có ít nhất 6 ký tự')
+  .max(128, 'Mật khẩu tối đa 128 ký tự');
 
 // .strict() rejects unknown keys, so role, userId or status cannot be injected from the client.
 export const registerSchema = z
@@ -21,11 +21,11 @@ export const registerSchema = z
   })
   .strict()
   .refine((data) => data.password === data.confirmPassword, {
-    message: 'Passwords do not match',
+    message: 'Mật khẩu xác nhận không khớp',
     path: ['confirmPassword'],
   })
-  .refine((data) => data.password.toLowerCase() !== data.email, {
-    message: 'Password must not be the same as the email',
+  .refine((data) => data.password.toLowerCase() !== data.email.toLowerCase(), {
+    message: 'Mật khẩu không được trùng với địa chỉ email',
     path: ['password'],
   });
 

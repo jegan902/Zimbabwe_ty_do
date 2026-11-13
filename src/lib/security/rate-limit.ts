@@ -13,18 +13,26 @@ export async function consumeRateLimit(
   limit: number,
   windowSeconds: number
 ): Promise<void> {
-  const key = `rl:${scope}:${crypto.createHash('sha256').update(identifier).digest('hex')}`;
+  try {
+    const key = `rl:${scope}:${crypto.createHash('sha256').update(identifier).digest('hex')}`;
 
-  const count = await redis.incr(key);
-  if (count === 1) {
-    await redis.expire(key, windowSeconds);
-  }
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, windowSeconds);
+    }
 
-  if (count > limit) {
-    const ttl = await redis.ttl(key);
-    const retryAfterSeconds = ttl > 0 ? ttl : windowSeconds;
-    throw new AppError(429, 'RATE_LIMITED', 'Too many requests. Try again later.', {
-      retryAfterSeconds,
-    });
+    if (count > limit) {
+      const ttl = await redis.ttl(key);
+      const retryAfterSeconds = ttl > 0 ? ttl : windowSeconds;
+      throw new AppError(429, 'RATE_LIMITED', 'Too many requests. Try again later.', {
+        retryAfterSeconds,
+      });
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    if (process.env.NODE_ENV === 'development') {
+      return;
+    }
+    throw err;
   }
 }

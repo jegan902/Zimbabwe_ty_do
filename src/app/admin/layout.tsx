@@ -9,6 +9,7 @@ import {
   Truck,
   RefreshCw,
   ShoppingBag,
+  Package,
   ArrowLeft,
   ShieldCheck,
   ShieldAlert,
@@ -167,6 +168,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { href: "/admin", label: "Tổng quan Dashboard", icon: LayoutDashboard },
     { href: "/admin/suppliers", label: "Nhà cung cấp & Vốn", icon: Truck },
+    { href: "/admin/products", label: "Quản lý sản phẩm", icon: Package },
     { href: "/admin/sync", label: "Trung tâm đồng bộ", icon: RefreshCw },
     { href: "/admin/orders", label: "Quản lý đơn & Đối soát", icon: ShoppingBag },
   ];

@@ -4,11 +4,12 @@ export type UserStatus = "ACTIVE" | "LOCKED" | "SUSPENDED" | "DELETED";
 export interface AuthUser {
   id: string;
   email: string;
-  username: string;
   role: UserRole;
   status: UserStatus;
   fullName: string | null;
-  avatar: string | null;
+  username?: string;
+  phone?: string | null;
+  avatar?: string | null;
 }
 
 export function isAdmin(user: AuthUser | null | undefined): boolean {

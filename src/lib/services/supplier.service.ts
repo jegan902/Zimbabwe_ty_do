@@ -111,6 +111,34 @@ export async function syncSupplierProducts(
 
   try {
     const { supplier, adapter, context } = await resolveSupplier(supplierId);
+
+    // Sync live balance to SupplierBalance if supported
+    if (adapter.supportsBalance) {
+      try {
+        const profile = await adapter.getProfile(context);
+        if (profile && profile.balance !== undefined && profile.balance !== null) {
+          await prisma.supplierBalance.upsert({
+            where: { supplierId },
+            create: {
+              supplierId,
+              balance: d(profile.balance).toFixed(2),
+              balanceType: "ACTUAL",
+              lastUpdatedAt: new Date(),
+              lastVerifiedAt: new Date(),
+            },
+            update: {
+              balance: d(profile.balance).toFixed(2),
+              balanceType: "ACTUAL",
+              lastUpdatedAt: new Date(),
+              lastVerifiedAt: new Date(),
+            },
+          });
+        }
+      } catch (e) {
+        logger.warn({ err: e, supplierId }, "Failed to fetch live balance during sync");
+      }
+    }
+
     const result = await adapter.getProducts(context);
 
     let newProducts = 0;
@@ -170,10 +198,11 @@ export async function syncSupplierProducts(
 
         // Explicit stock 0 from supplier = out of stock → hide on storefront.
         // null stock means the supplier does not expose inventory — do not invent OOS.
+        const isSupplierActive = supplier.status === "ACTIVE";
         const isOutOfStock = item.stock !== null && item.stock <= 0;
         const normalizedStatus: ProductStatus =
           item.isActive && !isOutOfStock ? "ACTIVE" : "INACTIVE";
-        const mappingActive = item.isActive && !isOutOfStock;
+        const mappingActive = isSupplierActive && item.isActive && !isOutOfStock;
 
         const sp = await prisma.supplierProduct.upsert({
           where: {
@@ -262,7 +291,8 @@ export async function syncSupplierProducts(
               profitValue: supplier.profitValue,
               pricingMode: "AUTO",
               stock: item.stock,
-              status: normalizedStatus,
+              status: isSupplierActive ? normalizedStatus : "INACTIVE",
+              isHidden: !isSupplierActive,
               lastSyncedAt: new Date(),
             },
           });
@@ -331,6 +361,7 @@ export async function syncSupplierProducts(
             );
           }
 
+          const shouldStayHidden = product.isHidden || !isSupplierActive;
           await prisma.product.update({
             where: { id: product.id },
             data: {
@@ -341,8 +372,8 @@ export async function syncSupplierProducts(
               supplierCost: costDecimal.toFixed(2),
               sellingPrice: product.pricingMode === "AUTO" ? newSellingPrice.toFixed(2) : undefined,
               stock: item.stock,
-              status: normalizedStatus,
-              isHidden: false,
+              status: shouldStayHidden ? "INACTIVE" : normalizedStatus,
+              isHidden: shouldStayHidden,
               lastSyncedAt: new Date(),
             },
           });

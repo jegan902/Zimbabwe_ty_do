@@ -62,12 +62,17 @@ export function BuyModal({ product, isOpen, onClose }: BuyModalProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        if (res.status === 409 && data.data?.newPrice) {
-          setPriceChangeWarning(data.data.newPrice);
+        if (res.status === 409 && (data.details?.newPrice || data.data?.newPrice)) {
+          const newPrice = data.details?.newPrice || data.data?.newPrice;
+          setPriceChangeWarning(newPrice);
           toast.warning("Giá sản phẩm vừa cập nhật, vui lòng xác nhận giá mới!");
           return;
         }
-        throw new Error(data.error?.message || "Đặt hàng thất bại");
+        const errorMsg =
+          data.message ||
+          (typeof data.error === "string" ? data.error : data.error?.message) ||
+          "Đặt hàng thất bại";
+        throw new Error(errorMsg);
       }
 
       toast.success("Thanh toán thành công! Đang chuyển đến đơn hàng...");

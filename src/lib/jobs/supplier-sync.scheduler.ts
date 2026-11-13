@@ -84,3 +84,32 @@ export async function runDueSupplierSyncs(): Promise<{
 
   return { checked: due.length, ran, skipped, failed };
 }
+
+let inProcessTimer: NodeJS.Timeout | null = null;
+
+export function initInProcessSyncWorker(intervalMs = 30_000) {
+  if (inProcessTimer) return;
+  logger.info("[AutoSync] In-process supplier sync worker started");
+
+  // Initial check after 3 seconds
+  setTimeout(() => {
+    runDueSupplierSyncs().catch((err) =>
+      logger.error({ err }, "Initial in-process supplier sync check failed")
+    );
+  }, 3_000);
+
+  inProcessTimer = setInterval(async () => {
+    try {
+      const summary = await runDueSupplierSyncs();
+      if (summary.ran > 0) {
+        logger.info(
+          { summary },
+          `[AutoSync] Completed auto-sync for ${summary.ran} due suppliers`
+        );
+      }
+    } catch (err) {
+      logger.error({ err }, "[AutoSync] In-process supplier sync tick failed");
+    }
+  }, intervalMs);
+}
+

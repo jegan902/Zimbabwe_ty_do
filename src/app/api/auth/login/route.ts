@@ -84,7 +84,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
     user: {
       id: user.id,
       email: user.email,
-      username: user.username,
+      username: user.email,
       fullName: user.fullName,
       role: user.role,
       status: user.status,

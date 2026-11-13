@@ -11,7 +11,7 @@ export const redis =
       return Math.min(times * 100, 1000);
     },
     lazyConnect: true,
-    enableOfflineQueue: false,
+    enableOfflineQueue: true,
   });
 
 redis.on('error', () => {

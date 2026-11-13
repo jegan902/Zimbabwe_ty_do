@@ -43,6 +43,7 @@ function toErrorResponse(error: unknown): NextResponse {
       field: issue.path.join("."),
       message: issue.message,
     }));
+    logger.warn({ details }, "Validation error in API route");
     return errorResponse(
       new AppError(422, "VALIDATION_ERROR", "Dữ liệu không hợp lệ", details),
       422

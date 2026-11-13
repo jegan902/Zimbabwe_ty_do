@@ -15,11 +15,11 @@ import { SupplierUnavailableError } from "@/lib/utils/errors";
 
 export interface SupplierRequestOptions {
   supplierId: string;
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PUT" | "DELETE";
   url: string;
   timeoutMs: number;
   headers?: Record<string, string>;
-  body?: FormData;
+  body?: FormData | string;
   /** Read-only calls may be retried; purchase calls must not be. */
   retryable?: boolean;
   maxRetries?: number;

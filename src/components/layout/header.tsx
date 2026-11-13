@@ -20,6 +20,7 @@ import {
   PlusCircle,
   Menu,
   Lock,
+  Code2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -54,6 +55,9 @@ export function Header() {
             </Link>
             <Link href="/orders" className="transition-colors hover:text-primary">
               Đơn hàng
+            </Link>
+            <Link href="/api-docs" className="transition-colors hover:text-primary font-semibold text-sky-600 dark:text-sky-400">
+              Tài liệu API
             </Link>
           </nav>
         </div>
@@ -103,6 +107,9 @@ export function Header() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => window.location.href = "/orders"} className="cursor-pointer">
                     <ShoppingBag className="mr-2 h-4 w-4" /> Lịch sử đơn hàng
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.location.href = "/api-docs"} className="cursor-pointer">
+                    <Code2 className="mr-2 h-4 w-4" /> Tài liệu tích hợp API
                   </DropdownMenuItem>
                   {(user.role === "ADMIN" || user.role === "SUPERADMIN") && (
                     <>

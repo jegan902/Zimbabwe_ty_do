@@ -25,7 +25,7 @@ export const GET = apiRoute(async (request: NextRequest) => {
       skip,
       take: limit,
       include: {
-        user: { select: { email: true, username: true } },
+        user: { select: { email: true, fullName: true } },
         product: { select: { id: true, name: true } },
       },
     }),

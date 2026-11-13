@@ -33,7 +33,7 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message || "Đăng nhập thất bại");
+        throw new Error(data.message || (typeof data.error === "object" ? data.error?.message : null) || data.error || "Đăng nhập thất bại");
       }
 
       toast.success("Đăng nhập thành công!");

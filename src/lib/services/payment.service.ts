@@ -120,13 +120,33 @@ export async function processPaymentWebhook(payload: Record<string, any>, signat
     },
   });
 
-  // Extract memo/content and transfer amount
-  const content = String(payload.content || payload.description || payload.code || "");
-  const transferAmount = Number(payload.transferAmount || payload.amount || 0);
+  // 1. Ignore if transaction is money out (transferType !== "in")
+  if (payload.transferType && payload.transferType !== "in") {
+    logger.info({ transferType: payload.transferType }, "SePay webhook skipped: transaction is not incoming transfer");
+    return { success: false, reason: "Giao dịch không phải tiền vào (transferType !== 'in')" };
+  }
 
-  // Search for NAPXXXXXX code in transfer content
-  const codeMatch = content.match(/NAP[A-Z0-9]{6}/i);
-  if (!codeMatch) {
+  // 2. Extract transfer amount
+  const transferAmount = Number(payload.transferAmount || payload.amount || 0);
+  if (transferAmount <= 0) {
+    logger.warn({ payload }, "SePay webhook received with non-positive transferAmount");
+    return { success: false, reason: "Số tiền chuyển khoản không hợp lệ" };
+  }
+
+  // 3. Search for NAPXXXXXX code: check direct code from SePay first, then parse content / description
+  const directCode = typeof payload.code === "string" ? payload.code.trim().toUpperCase() : "";
+  let paymentCode = directCode.match(/^NAP[A-Z0-9]{6}$/i) ? directCode : "";
+
+  if (!paymentCode) {
+    const content = String(payload.content || payload.description || "");
+    const codeMatch = content.match(/NAP[A-Z0-9]{6}/i);
+    if (codeMatch) {
+      paymentCode = codeMatch[0].toUpperCase();
+    }
+  }
+
+  if (!paymentCode) {
+    const content = String(payload.content || payload.description || "");
     logger.warn({ content }, "Payment webhook received without matching NAP code");
     await prisma.paymentWebhook.update({
       where: { gatewayName_webhookId: { gatewayName, webhookId } },
@@ -135,7 +155,6 @@ export async function processPaymentWebhook(payload: Record<string, any>, signat
     return { success: false, reason: "No payment code found" };
   }
 
-  const paymentCode = codeMatch[0].toUpperCase();
   const paymentTxn = await prisma.paymentTransaction.findUnique({
     where: { paymentCode },
   });

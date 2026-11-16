@@ -1,8 +1,9 @@
 import { getCategories, getProducts } from "@/lib/services/catalog.service";
 import { ProductGrid } from "@/components/portal/product-grid";
 import { CatalogRealtime } from "@/components/portal/catalog-realtime";
+import { CategoryFilterBar } from "@/components/portal/category-filter-bar";
 import Link from "next/link";
-import { Search, Filter } from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -60,74 +61,13 @@ export default async function ProductsPage({
         </form>
       </div>
 
-      {/* Category Pills & Sort */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/products${search ? `?search=${encodeURIComponent(search)}` : ""}`}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-              !categoryId
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "border bg-card hover:bg-muted text-muted-foreground"
-            }`}
-          >
-            Tất cả
-          </Link>
-          {categories.map((c) => (
-            <Link
-              key={c.id}
-              href={`/products?categoryId=${c.id}${search ? `&search=${encodeURIComponent(search)}` : ""}`}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                categoryId === c.id
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "border bg-card hover:bg-muted text-muted-foreground"
-              }`}
-            >
-              {c.name} ({c._count.products})
-            </Link>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground font-medium">Sắp xếp:</span>
-          <Link
-            href={`/products?${new URLSearchParams({
-              ...(categoryId ? { categoryId } : {}),
-              ...(search ? { search } : {}),
-              sortBy: "newest",
-            }).toString()}`}
-            className={`px-2.5 py-1 rounded border text-xs font-medium ${
-              sortBy === "newest" ? "bg-muted font-bold" : "hover:bg-muted/50"
-            }`}
-          >
-            Mới nhất
-          </Link>
-          <Link
-            href={`/products?${new URLSearchParams({
-              ...(categoryId ? { categoryId } : {}),
-              ...(search ? { search } : {}),
-              sortBy: "price_asc",
-            }).toString()}`}
-            className={`px-2.5 py-1 rounded border text-xs font-medium ${
-              sortBy === "price_asc" ? "bg-muted font-bold" : "hover:bg-muted/50"
-            }`}
-          >
-            Giá thấp
-          </Link>
-          <Link
-            href={`/products?${new URLSearchParams({
-              ...(categoryId ? { categoryId } : {}),
-              ...(search ? { search } : {}),
-              sortBy: "price_desc",
-            }).toString()}`}
-            className={`px-2.5 py-1 rounded border text-xs font-medium ${
-              sortBy === "price_desc" ? "bg-muted font-bold" : "hover:bg-muted/50"
-            }`}
-          >
-            Giá cao
-          </Link>
-        </div>
-      </div>
+      {/* Category Pills & Sort Bar with overflow-x-auto, scrollbar-none and 'Xem nhiều hơn' expandable dropdown */}
+      <CategoryFilterBar
+        categories={categories}
+        activeCategoryId={categoryId}
+        search={search}
+        sortBy={sortBy}
+      />
 
       {/* Grid */}
       <ProductGrid initialProducts={data.items as any} />

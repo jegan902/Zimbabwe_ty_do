@@ -15,15 +15,33 @@ export interface ProductListParams {
   includeHidden?: boolean;
 }
 
-export async function getCategories() {
-  const cacheKey = `${CACHE_KEYS.categories}:list`;
+export interface GetCategoriesOptions {
+  includeEmpty?: boolean;
+}
+
+export async function getCategories(options?: GetCategoriesOptions) {
+  const includeEmpty = options?.includeEmpty ?? false;
+  const cacheKey = `${CACHE_KEYS.categories}:list:${includeEmpty ? "all" : "non-empty"}`;
   const cached = await cacheGet<
-    Array<{ id: string; name: string; slug: string; _count: { products: number } }>
+    Array<{ id: string; name: string; slug: string; icon: string | null; description: string | null; _count: { products: number } }>
   >(cacheKey);
   if (cached) return cached;
 
   const categories = await prisma.category.findMany({
-    where: { status: "ACTIVE" },
+    where: {
+      status: "ACTIVE",
+      ...(includeEmpty
+        ? {}
+        : {
+            products: {
+              some: {
+                status: "ACTIVE",
+                isHidden: false,
+                OR: [{ stock: null }, { stock: { gt: 0 } }],
+              },
+            },
+          }),
+    },
     orderBy: { sortOrder: "asc" },
     select: {
       id: true,
@@ -45,8 +63,10 @@ export async function getCategories() {
     },
   });
 
-  await cacheSet(cacheKey, categories, 60);
-  return categories;
+  const filtered = includeEmpty ? categories : categories.filter((c) => c._count.products > 0);
+
+  await cacheSet(cacheKey, filtered, 60);
+  return filtered;
 }
 
 /** Units delivered in successful / partially fulfilled orders. */

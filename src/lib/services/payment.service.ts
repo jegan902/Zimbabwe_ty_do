@@ -36,6 +36,19 @@ export async function createDepositIntent(
     throw new ValidationError("Số tiền nạp tối thiểu 10.000 VNĐ và tối đa 100.000.000 VNĐ");
   }
 
+  // Tự động hủy các giao dịch PENDING cũ của user nếu đã quá hạn 5 phút
+  await prisma.paymentTransaction.updateMany({
+    where: {
+      userId,
+      status: "PENDING",
+      expiresAt: { lt: new Date() },
+    },
+    data: {
+      status: "CANCELLED",
+      failureReason: "Quá thời hạn 5 phút (Tự động hủy)",
+    },
+  });
+
   const wallet = await getOrCreateWallet(userId);
 
   // Generate unique payment code
@@ -50,7 +63,8 @@ export async function createDepositIntent(
   const accountNumber = process.env.VIETQR_BANK_ACCOUNT_NUMBER || "0000000000";
   const accountName = process.env.VIETQR_BANK_ACCOUNT_NAME || "MARKETPLACE ADMIN";
 
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  // Thời hạn nạp tiền: đúng 5 phút
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   const txn = await prisma.paymentTransaction.create({
     data: {
@@ -217,5 +231,52 @@ export async function processPaymentWebhook(payload: Record<string, any>, signat
   });
 
   return { success: true, paymentCode, amount: transferAmount };
+}
+
+export async function cancelDepositIntent(
+  userId: string,
+  identifier: string,
+  reason: string = "Quá thời hạn 5 phút (Tự động hủy)"
+) {
+  const txn = await prisma.paymentTransaction.findFirst({
+    where: {
+      userId,
+      OR: [{ id: identifier }, { paymentCode: identifier }],
+    },
+  });
+
+  if (!txn) {
+    throw new NotFoundError("Giao dịch nạp tiền");
+  }
+
+  if (txn.status === "VERIFIED") {
+    return {
+      cancelled: false,
+      status: "VERIFIED",
+      message: "Giao dịch đã được xác nhận thành công",
+    };
+  }
+
+  if (txn.status === "CANCELLED" || txn.status === "EXPIRED") {
+    return {
+      cancelled: true,
+      status: txn.status,
+      message: "Giao dịch đã được hủy trước đó",
+    };
+  }
+
+  const updated = await prisma.paymentTransaction.update({
+    where: { id: txn.id },
+    data: {
+      status: "CANCELLED",
+      failureReason: reason,
+    },
+  });
+
+  return {
+    cancelled: true,
+    status: updated.status,
+    message: "Đã hủy giao dịch nạp tiền",
+  };
 }
 

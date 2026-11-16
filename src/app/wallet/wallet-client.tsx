@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/components/auth/auth-context";
-import { Wallet, QrCode, ArrowDownRight, ArrowUpRight, Copy, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import {
+  Wallet,
+  QrCode,
+  ArrowDownRight,
+  ArrowUpRight,
+  Copy,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  Clock,
+  AlertTriangle,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +30,12 @@ export function WalletClient() {
   const [creatingIntent, setCreatingIntent] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTxns, setLoadingTxns] = useState(true);
+
+  // 5-minute countdown and cancellation states
+  const [timeLeft, setTimeLeft] = useState<number>(300); // 300s = 5m
+  const [isExpired, setIsExpired] = useState<boolean>(false);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
+  const [cancelling, setCancelling] = useState<boolean>(false);
 
   const fetchTransactions = async () => {
     try {
@@ -39,6 +57,94 @@ export function WalletClient() {
     }
   }, [user]);
 
+  // Cancel deposit transaction (can be called automatically on 5-min timeout or manually)
+  const handleCancelDeposit = async (isAutoTimeout = false) => {
+    if (!depositData || cancelling) return;
+
+    setCancelling(true);
+    try {
+      await fetch("/api/wallet/deposit/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transactionId: depositData.transactionId,
+          paymentCode: depositData.paymentCode,
+          reason: isAutoTimeout
+            ? "Quá thời hạn 5 phút (Tự động hủy)"
+            : "Người dùng chủ động hủy yêu cầu",
+        }),
+      });
+
+      if (isAutoTimeout) {
+        setIsExpired(true);
+        toast.error("Giao dịch nạp tiền đã quá 5 phút và tự động hủy.");
+      } else {
+        toast.success("Đã hủy yêu cầu nạp tiền");
+        setDepositData(null);
+        setIsExpired(false);
+        setIsVerified(false);
+      }
+      fetchTransactions();
+    } catch {
+      if (isAutoTimeout) setIsExpired(true);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  // 5-minute countdown timer
+  useEffect(() => {
+    if (!depositData || isExpired || isVerified) return;
+
+    // Calculate initial remaining seconds
+    const targetTime = depositData.expiresAt
+      ? new Date(depositData.expiresAt).getTime()
+      : Date.now() + 5 * 60 * 1000;
+
+    const updateTimer = () => {
+      const remainingSec = Math.max(0, Math.floor((targetTime - Date.now()) / 1000));
+      setTimeLeft(remainingSec);
+
+      if (remainingSec <= 0) {
+        setIsExpired(true);
+        handleCancelDeposit(true);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [depositData, isExpired, isVerified]);
+
+  // Real-time polling check for deposit verification
+  useEffect(() => {
+    if (!depositData || isExpired || isVerified) return;
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`/api/wallet/deposit?code=${depositData.paymentCode}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const txn = data.data?.transaction;
+
+        if (txn?.status === "VERIFIED") {
+          setIsVerified(true);
+          toast.success("Nạp tiền thành công! Số dư ví đã được cộng.");
+          refresh();
+          fetchTransactions();
+        } else if (txn?.status === "CANCELLED" || txn?.status === "EXPIRED") {
+          setIsExpired(true);
+        }
+      } catch {
+        // Ignored in polling
+      }
+    };
+
+    const pollInterval = setInterval(checkStatus, 3000);
+    return () => clearInterval(pollInterval);
+  }, [depositData, isExpired, isVerified]);
+
   const handleCreateDeposit = async () => {
     if (!amount || amount < 10_000) {
       toast.error("Số tiền nạp tối thiểu là 10.000 VNĐ");
@@ -57,7 +163,10 @@ export function WalletClient() {
         throw new Error(data.error?.message || "Không thể tạo yêu cầu nạp tiền");
       }
       setDepositData(data.data);
-      toast.success("Đã tạo mã QR nạp tiền thành công!");
+      setIsExpired(false);
+      setIsVerified(false);
+      setTimeLeft(300); // 5 minutes
+      toast.success("Đã tạo mã QR nạp tiền thành công! Hết hạn sau 5 phút.");
     } catch (err: any) {
       toast.error(err.message || "Lỗi tạo yêu cầu nạp tiền");
     } finally {
@@ -68,6 +177,12 @@ export function WalletClient() {
   const copyText = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`Đã sao chép ${label}!`);
+  };
+
+  const formatCountdown = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
   if (authLoading) {
@@ -186,17 +301,91 @@ export function WalletClient() {
 
         {/* QR Display Area */}
         <div className="md:col-span-7 rounded-2xl border bg-card p-6 shadow-sm min-h-[350px] flex flex-col justify-center">
-          {depositData ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b pb-3">
-                <span className="font-bold text-sm">Quét mã VietQR chuyển khoản</span>
-                <Button size="sm" variant="ghost" onClick={refresh} className="h-7 text-xs gap-1">
-                  <RefreshCw className="h-3 w-3" /> Kiểm tra số dư
+          {isVerified ? (
+            <div className="text-center py-10 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="h-16 w-16 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-xl font-black text-foreground">Nạp tiền thành công!</h4>
+                <p className="text-xs text-muted-foreground">
+                  Giao dịch <strong className="font-mono text-primary">{depositData?.paymentCode}</strong> đã được hệ thống ghi nhận và cộng tiền vào ví.
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  setDepositData(null);
+                  setIsVerified(false);
+                }}
+                className="font-bold text-xs shadow-sm h-9"
+              >
+                Tạo giao dịch nạp khác
+              </Button>
+            </div>
+          ) : isExpired ? (
+            <div className="text-center py-10 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+              <div className="h-16 w-16 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mx-auto shadow-inner">
+                <AlertTriangle className="h-10 w-10 text-destructive" />
+              </div>
+              <div className="space-y-1.5 max-w-sm mx-auto">
+                <h4 className="text-lg font-black text-destructive">Giao dịch đã quá 5 phút và tự động hủy</h4>
+                <p className="text-xs text-muted-foreground">
+                  Mã QR chuyển khoản <strong className="font-mono text-foreground">{depositData?.paymentCode}</strong> đã hết hạn. Vui lòng không tiếp tục chuyển khoản vào mã này để tránh sự cố.
+                </p>
+              </div>
+              <div className="pt-2">
+                <Button
+                  onClick={() => {
+                    setDepositData(null);
+                    setIsExpired(false);
+                  }}
+                  className="font-bold text-xs h-9 shadow-sm gap-1.5"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Tạo mã QR nạp tiền mới
                 </Button>
+              </div>
+            </div>
+          ) : depositData ? (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm">Quét mã VietQR chuyển khoản</span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Countdown Timer */}
+                  <div
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-xs font-bold border transition-all ${
+                      timeLeft <= 60
+                        ? "bg-destructive/10 text-destructive border-destructive/30 animate-pulse"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                    }`}
+                    title="Thời gian hiệu lực của mã QR này"
+                  >
+                    <Clock className="h-3.5 w-3.5 shrink-0" />
+                    <span>Hết hạn: <strong className="text-sm">{formatCountdown(timeLeft)}</strong></span>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleCancelDeposit(false)}
+                    disabled={cancelling}
+                    className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 px-2"
+                  >
+                    {cancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                    Hủy yêu cầu
+                  </Button>
+
+                  <Button size="sm" variant="ghost" onClick={refresh} className="h-7 text-xs gap-1 px-2">
+                    <RefreshCw className="h-3 w-3" /> Kiểm tra số dư
+                  </Button>
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row items-center gap-6">
-                <div className="p-2 border rounded-xl bg-white shrink-0 shadow-sm">
+                <div className="p-2 border rounded-xl bg-white shrink-0 shadow-sm relative group">
                   <img
                     src={depositData.qrUrl}
                     alt="VietQR"
@@ -256,7 +445,7 @@ export function WalletClient() {
               </div>
 
               <div className="rounded-lg bg-muted p-2.5 text-[11px] text-muted-foreground text-center">
-                Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> để hệ thống tự động cộng tiền sau 5 - 15 giây.
+                Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> và chuyển khoản trước khi hết thời gian <strong>5 phút</strong>. Hệ thống tự động kiểm tra và cộng tiền sau 5 - 15 giây.
               </div>
             </div>
           ) : (

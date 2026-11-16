@@ -40,9 +40,9 @@ export function Footer() {
           <p>© {new Date().getFullYear()} DIGISHOP Multi-Supplier Marketplace. Hệ thống phân phối sản phẩm số tự động.</p>
           <div className="flex items-center gap-6">
             <Link href="/api-docs" className="text-primary font-semibold hover:underline">Tài liệu API</Link>
-            <Link href="/" className="hover:underline">Điều khoản dịch vụ</Link>
-            <Link href="/" className="hover:underline">Chính sách bảo mật</Link>
-            <Link href="/" className="hover:underline">Hướng dẫn mua hàng</Link>
+            <Link href="/dieu-khoan-dich-vu" className="hover:underline">Điều khoản dịch vụ</Link>
+            <Link href="/chinh-sach-bao-mat" className="hover:underline">Chính sách bảo mật</Link>
+            <Link href="/huong-dan-mua-hang" className="hover:underline">Hướng dẫn mua hàng</Link>
           </div>
         </div>
       </div>

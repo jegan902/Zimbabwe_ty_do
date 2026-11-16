@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Truck, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Play, Loader2, DollarSign, Settings, KeyRound, Plus, Trash2, Power, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ export default function AdminSuppliersPage() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [availableAdapters, setAvailableAdapters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Create Supplier modal
@@ -36,7 +37,12 @@ export default function AdminSuppliersPage() {
   const [editProfitValue, setEditProfitValue] = useState("");
   const [editAdapterKey, setEditAdapterKey] = useState("quangvinh");
 
-  const fetchSuppliers = async () => {
+  const fetchSuppliers = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
     try {
       const res = await fetch("/api/admin/suppliers");
       const json = await res.json();
@@ -54,12 +60,31 @@ export default function AdminSuppliersPage() {
       // Ignored
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSuppliers();
-  }, []);
+  }, [fetchSuppliers]);
+
+  // Realtime SSE listener for supplier balance and sync events without full reload flicker
+  useEffect(() => {
+    const source = new EventSource("/api/realtime");
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (
+          data.type === "supplier.balance" ||
+          data.type === "sync.status" ||
+          data.type === "product.synced"
+        ) {
+          fetchSuppliers({ silent: true });
+        }
+      } catch {}
+    };
+    return () => source.close();
+  }, [fetchSuppliers]);
 
   const handleTestConnection = async (supplierId: string) => {
     setActionLoading(`test-${supplierId}`);
@@ -72,7 +97,7 @@ export default function AdminSuppliersPage() {
         throw new Error(json.message || json.error?.message || json.error || "Kiểm tra kết nối thất bại");
       }
       toast.success("Kết nối thành công tới nhà cung cấp!");
-      fetchSuppliers();
+      fetchSuppliers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -93,7 +118,7 @@ export default function AdminSuppliersPage() {
       toast.success(
         `Đồng bộ hoàn tất! ${json.data.newProducts} mới, ${json.data.updatedProducts} cập nhật, ${json.data.priceChangedProducts} đổi giá.`
       );
-      fetchSuppliers();
+      fetchSuppliers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -117,7 +142,7 @@ export default function AdminSuppliersPage() {
       if (!res.ok) throw new Error(json.error?.message || "Cập nhật số dư thất bại");
       toast.success("Đã cập nhật số dư vốn thành công!");
       setEditingSupplier(null);
-      fetchSuppliers();
+      fetchSuppliers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -144,7 +169,7 @@ export default function AdminSuppliersPage() {
       toast.success("Đã cập nhật API Key & cấu hình nhà cung cấp thành công!");
       setConfigSupplier(null);
       setEditApiKey("");
-      fetchSuppliers();
+      fetchSuppliers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -178,7 +203,7 @@ export default function AdminSuppliersPage() {
       setCreateModalOpen(false);
       setNewName("");
       setNewApiKey("");
-      fetchSuppliers();
+      fetchSuppliers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -196,7 +221,7 @@ export default function AdminSuppliersPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || json.error?.message || "Thao tác thất bại");
       toast.success(json.message || "Đã xóa nhà cung cấp thành công!");
-      fetchSuppliers();
+      fetchSuppliers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -216,6 +241,11 @@ export default function AdminSuppliersPage() {
     ) {
       return;
     }
+
+    // Optimistic update
+    setSuppliers((prev) =>
+      prev.map((s) => (s.id === supplier.id ? { ...s, status: nextStatus } : s))
+    );
 
     setActionLoading(`toggle-${supplier.id}`);
     try {
@@ -237,15 +267,16 @@ export default function AdminSuppliersPage() {
           { duration: 4000 }
         );
       }
-      fetchSuppliers();
+      fetchSuppliers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
+      fetchSuppliers({ silent: true });
     } finally {
       setActionLoading(null);
     }
   };
 
-  if (loading) {
+  if (loading && suppliers.length === 0) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -257,22 +288,42 @@ export default function AdminSuppliersPage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black">Quản lý Nhà Cung Cấp & Vốn</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black">Quản lý Nhà Cung Cấp & Vốn</h1>
+            {isRefreshing && (
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/30 animate-pulse">
+                Đang cập nhật live...
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">
             Mở rộng kết nối đa nhà cung cấp số, theo dõi kết nối API và hạn mức vốn nạp trước.
           </p>
         </div>
 
-        <Button
-          onClick={() => {
-            setNewName("");
-            setNewApiKey("");
-            setCreateModalOpen(true);
-          }}
-          className="font-bold text-xs gap-1.5 shadow-sm"
-        >
-          <Plus className="h-4 w-4" /> Thêm nhà cung cấp mới
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchSuppliers({ silent: true })}
+            disabled={loading || isRefreshing}
+            className="font-bold text-xs gap-1.5 shadow-xs"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            Làm mới
+          </Button>
+          <Button
+            onClick={() => {
+              setNewName("");
+              setNewApiKey("");
+              setCreateModalOpen(true);
+            }}
+            size="sm"
+            className="font-bold text-xs gap-1.5 shadow-sm"
+          >
+            <Plus className="h-4 w-4" /> Thêm nhà cung cấp mới
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-6">

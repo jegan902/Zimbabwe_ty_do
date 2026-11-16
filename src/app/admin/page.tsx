@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -12,6 +12,7 @@ import {
   Truck,
   ArrowUpRight,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,26 +20,53 @@ import { Button } from "@/components/ui/button";
 export default function AdminDashboardPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [syncingSupplierId, setSyncingSupplierId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchOverview() {
-      try {
-        const res = await fetch("/api/admin/overview");
-        const json = await res.json();
-        if (res.ok) {
-          setData(json.data);
-        }
-      } catch {
-        // Ignored
-      } finally {
-        setLoading(false);
-      }
+  const fetchOverview = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setLoading(true);
+    } else {
+      setIsRefreshing(true);
     }
-    fetchOverview();
+    try {
+      const res = await fetch("/api/admin/overview");
+      const json = await res.json();
+      if (res.ok) {
+        setData(json.data);
+      }
+    } catch {
+      // Ignored
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    fetchOverview();
+  }, [fetchOverview]);
+
+  // Realtime SSE listener for instant metrics sync without flicker
+  useEffect(() => {
+    const source = new EventSource("/api/realtime");
+    source.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (
+          payload.type === "order.updated" ||
+          payload.type === "wallet.updated" ||
+          payload.type === "sync.status" ||
+          payload.type === "supplier.balance"
+        ) {
+          fetchOverview({ silent: true });
+        }
+      } catch {}
+    };
+    return () => source.close();
+  }, [fetchOverview]);
+
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -59,10 +87,8 @@ export default function AdminDashboardPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error?.message || "Kiểm tra thất bại");
-      // Re-fetch overview
-      const overviewRes = await fetch("/api/admin/overview");
-      const overviewJson = await overviewRes.json();
-      if (overviewRes.ok) setData(overviewJson.data);
+      // Re-fetch overview silently
+      await fetchOverview({ silent: true });
     } catch {
       // Ignored
     } finally {
@@ -74,12 +100,29 @@ export default function AdminDashboardPage() {
     <div className="space-y-8 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black">Dashboard Tổng Quan</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black">Dashboard Tổng Quan</h1>
+            {isRefreshing && (
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/30 animate-pulse">
+                Đang cập nhật live...
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">
             Theo dõi doanh thu, lợi nhuận, số dư ví khách, các tài khoản nhà cung cấp và vận hành hệ thống.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchOverview({ silent: true })}
+            disabled={loading || isRefreshing}
+            className="text-xs font-semibold gap-1.5"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            Làm mới
+          </Button>
           <Button variant="outline" size="sm" asChild className="text-xs font-semibold">
             <Link href="/admin/deposits">Quản lý nạp tiền &rarr;</Link>
           </Button>

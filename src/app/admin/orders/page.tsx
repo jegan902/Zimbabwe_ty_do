@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   ShoppingBag,
   Eye,
@@ -39,6 +39,21 @@ export default function AdminOrdersPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const filtersRef = useRef({
+    page: 1,
+    statusFilter: "ALL",
+    search: "",
+  });
+
+  useEffect(() => {
+    filtersRef.current = {
+      page,
+      statusFilter,
+      search,
+    };
+  }, [page, statusFilter, search]);
 
   // Reconciliation Dialog State
   const [reconcilingOrder, setReconcilingOrder] = useState<any>(null);
@@ -55,39 +70,78 @@ export default function AdminOrdersPage() {
   const [deletingOrder, setDeletingOrder] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchOrders = async (targetPage = page, targetStatus = statusFilter) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: targetPage.toString(),
-        limit: "15",
-        status: targetStatus,
-      });
-      if (search.trim()) {
-        params.append("search", search.trim());
+  const fetchOrders = useCallback(
+    async (options?: {
+      silent?: boolean;
+      filters?: Partial<typeof filtersRef.current>;
+    }) => {
+      const silent = options?.silent ?? false;
+      const activeFilters = {
+        ...filtersRef.current,
+        ...(options?.filters || {}),
+      };
+
+      if (!silent) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
       }
 
-      const res = await fetch(`/api/admin/orders?${params.toString()}`);
-      const json = await res.json();
-      if (res.ok) {
-        setOrders(json.data?.items || []);
-        setTotalPages(json.data?.totalPages || 1);
-      }
-    } catch {
-      toast.error("Không thể tải danh sách đơn hàng");
-    } finally {
-      setLoading(false);
-    }
-  };
+      try {
+        const params = new URLSearchParams({
+          page: activeFilters.page.toString(),
+          limit: "15",
+          status: activeFilters.statusFilter,
+        });
+        if (activeFilters.search.trim()) {
+          params.append("search", activeFilters.search.trim());
+        }
 
+        const res = await fetch(`/api/admin/orders?${params.toString()}`);
+        const json = await res.json();
+        if (res.ok) {
+          setOrders(json.data?.items || []);
+          setTotalPages(json.data?.totalPages || 1);
+        }
+      } catch {
+        toast.error("Không thể tải danh sách đơn hàng");
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+        setIsRefreshing(false);
+      }
+    },
+    []
+  );
+
+  // Initial load
   useEffect(() => {
-    fetchOrders(page, statusFilter);
-  }, [page, statusFilter]);
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Realtime SSE listener for order updates without losing filters and without flickering table
+  useEffect(() => {
+    const source = new EventSource("/api/realtime");
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "order.updated") {
+          fetchOrders({ silent: true });
+          toast.info("Đã cập nhật dữ liệu đơn hàng thời gian thực!", {
+            id: "realtime-orders",
+            duration: 2500,
+          });
+        }
+      } catch {}
+    };
+    return () => source.close();
+  }, [fetchOrders]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    fetchOrders(1, statusFilter);
+    fetchOrders({ filters: { page: 1, search } });
   };
 
   const openOrderDetail = async (orderId: string) => {
@@ -111,6 +165,8 @@ export default function AdminOrdersPage() {
   const handleDeleteOrder = async () => {
     if (!deletingOrder) return;
     setIsDeleting(true);
+    // Optimistic removal
+    setOrders((prev) => prev.filter((o) => o.id !== deletingOrder.id));
     try {
       const res = await fetch(`/api/admin/orders/${deletingOrder.id}`, {
         method: "DELETE",
@@ -120,9 +176,10 @@ export default function AdminOrdersPage() {
 
       toast.success(json.data?.message || "Đã xóa đơn hàng thành công!");
       setDeletingOrder(null);
-      fetchOrders(page, statusFilter);
+      fetchOrders({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
+      fetchOrders({ silent: true });
     } finally {
       setIsDeleting(false);
     }
@@ -160,7 +217,7 @@ export default function AdminOrdersPage() {
       setReconcilingOrder(null);
       setCredentialsInput("");
       setNoteInput("");
-      fetchOrders(page, statusFilter);
+      fetchOrders({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -178,7 +235,14 @@ export default function AdminOrdersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black">Quản Lý Đơn Hàng & Đối Soát</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-black">Quản Lý Đơn Hàng & Đối Soát</h1>
+            {isRefreshing && (
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/30 bg-primary/5 animate-pulse gap-1 py-0.5 px-2">
+                <RefreshCw className="h-3 w-3 animate-spin" /> Đang cập nhật live...
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">
             Theo dõi tất cả đơn hàng, xem chi tiết tài khoản bàn giao, xóa đơn hoặc xử lý đối soát.
           </p>
@@ -187,11 +251,11 @@ export default function AdminOrdersPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => fetchOrders(page, statusFilter)}
-          disabled={loading}
-          className="h-8 text-xs font-semibold gap-1.5"
+          onClick={() => fetchOrders({ silent: true })}
+          disabled={loading || isRefreshing}
+          className="h-8 text-xs font-semibold gap-1.5 cursor-pointer"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${loading || isRefreshing ? "animate-spin" : ""}`} />
           Làm mới
         </Button>
       </div>
@@ -204,8 +268,22 @@ export default function AdminOrdersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm theo mã đơn (ví dụ ORD-...), email khách, sản phẩm..."
-            className="pl-9 h-9 text-xs"
+            className="pl-9 pr-8 h-9 text-xs"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setPage(1);
+                fetchOrders({ filters: { page: 1, search: "" } });
+              }}
+              className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer text-xs"
+              title="Xóa tìm kiếm"
+            >
+              ✕
+            </button>
+          )}
         </form>
 
         {/* Filter buttons */}
@@ -216,8 +294,9 @@ export default function AdminOrdersPage() {
               onClick={() => {
                 setStatusFilter(st);
                 setPage(1);
+                fetchOrders({ filters: { page: 1, statusFilter: st } });
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 statusFilter === st
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -237,7 +316,7 @@ export default function AdminOrdersPage() {
 
       {/* Orders Table */}
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
-        {loading ? (
+        {loading && orders.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -356,18 +435,26 @@ export default function AdminOrdersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => {
+                  const newPage = Math.max(1, page - 1);
+                  setPage(newPage);
+                  fetchOrders({ filters: { page: newPage } });
+                }}
                 disabled={page <= 1}
-                className="h-7 text-xs"
+                className="h-7 text-xs cursor-pointer"
               >
                 Trước
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => {
+                  const newPage = Math.min(totalPages, page + 1);
+                  setPage(newPage);
+                  fetchOrders({ filters: { page: newPage } });
+                }}
                 disabled={page >= totalPages}
-                className="h-7 text-xs"
+                className="h-7 text-xs cursor-pointer"
               >
                 Sau
               </Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   RefreshCw,
   Play,
@@ -25,6 +25,7 @@ export default function AdminSyncPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
 
@@ -36,25 +37,12 @@ export default function AdminSyncPage() {
   } | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
-  const fetchSuppliersAndLogs = async () => {
-    try {
-      const res = await fetch("/api/admin/suppliers");
-      const json = await res.json();
-      const list = Array.isArray(json.data) ? json.data : json.data?.suppliers || [];
-      if (res.ok && list.length > 0) {
-        setSuppliers(list);
-        const firstId = list[0].id;
-        setSelectedSupplierId(firstId);
-        loadLogsAndSettings(firstId);
-      }
-    } catch {
-      // Ignored
-    } finally {
-      setLoading(false);
-    }
-  };
+  const selectedSupplierIdRef = useRef(selectedSupplierId);
+  useEffect(() => {
+    selectedSupplierIdRef.current = selectedSupplierId;
+  }, [selectedSupplierId]);
 
-  const loadLogsAndSettings = async (supplierId: string) => {
+  const loadLogsAndSettings = useCallback(async (supplierId: string) => {
     try {
       const [logsRes, settingsRes] = await Promise.all([
         fetch(`/api/admin/suppliers/${supplierId}/sync-logs`),
@@ -68,11 +56,42 @@ export default function AdminSyncPage() {
     } catch {
       // Ignored
     }
-  };
+  }, []);
+
+  const fetchSuppliersAndLogs = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      try {
+        const res = await fetch("/api/admin/suppliers");
+        const json = await res.json();
+        const list = Array.isArray(json.data) ? json.data : json.data?.suppliers || [];
+        if (res.ok && list.length > 0) {
+          setSuppliers(list);
+          const currentId = selectedSupplierIdRef.current;
+          const activeId =
+            currentId && list.some((s: any) => s.id === currentId)
+              ? currentId
+              : list[0].id;
+          setSelectedSupplierId(activeId);
+          loadLogsAndSettings(activeId);
+        }
+      } catch {
+        // Ignored
+      } finally {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [loadLogsAndSettings]
+  );
 
   useEffect(() => {
     fetchSuppliersAndLogs();
-  }, []);
+  }, [fetchSuppliersAndLogs]);
 
   // Realtime SSE listener for sync status, logs and supplier balance
   useEffect(() => {
@@ -85,7 +104,7 @@ export default function AdminSyncPage() {
           data.type === "product.synced" ||
           data.type === "supplier.balance"
         ) {
-          fetchSuppliersAndLogs();
+          fetchSuppliersAndLogs({ silent: true });
           toast.info("Đã tự động cập nhật số dư & lịch sử đồng bộ NCC!", {
             id: "realtime-sync-status",
             duration: 3000,
@@ -94,7 +113,7 @@ export default function AdminSyncPage() {
       } catch {}
     };
     return () => source.close();
-  }, [selectedSupplierId]);
+  }, [fetchSuppliersAndLogs]);
 
   // Sync Selected Supplier
   const handleSyncSelected = async () => {
@@ -158,7 +177,7 @@ export default function AdminSyncPage() {
     }
   };
 
-  if (loading) {
+  if (loading && suppliers.length === 0) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -173,13 +192,31 @@ export default function AdminSyncPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black">Trung Tâm Quản Lý Đồng Bộ</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black">Trung Tâm Quản Lý Đồng Bộ</h1>
+            {isRefreshing && (
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/30 animate-pulse">
+                Đang cập nhật live...
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">
             Theo dõi tiến trình đồng bộ dữ liệu sản phẩm, giá nhập và cập nhật trạng thái tự động từ các nhà cung cấp số.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
+          <Button
+            onClick={() => fetchSuppliersAndLogs({ silent: true })}
+            disabled={loading || isRefreshing}
+            variant="outline"
+            size="sm"
+            className="font-bold text-xs gap-1.5 shadow-xs"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            Làm mới
+          </Button>
+
           <Button
             onClick={handleSyncAll}
             disabled={syncingAll}

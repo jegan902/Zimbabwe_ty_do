@@ -6,6 +6,7 @@ import { BuyModal } from "@/components/portal/buy-modal";
 import { ShoppingCart, Eye, Tag, Package, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DEFAULT_PRODUCT_IMAGE, getProductImageUrl } from "@/lib/utils/product-image";
 
 export interface ProductItem {
   id: string;
@@ -62,18 +63,15 @@ export function ProductGrid({ initialProducts }: { initialProducts: ProductItem[
               key={p.id}
               className="group relative flex flex-col rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-all overflow-hidden"
             >
-              <div className="aspect-[4/3] w-full bg-muted/60 relative overflow-hidden flex items-center justify-center p-4">
-                {p.image ? (
-                  <img
-                    src={p.image}
-                    alt={p.name}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary font-black text-2xl">
-                    {p.name.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
+              <div className="aspect-[4/3] w-full bg-muted/40 relative overflow-hidden flex items-center justify-center">
+                <img
+                  src={getProductImageUrl(p.image)}
+                  alt={p.name}
+                  onError={(e) => {
+                    e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                  }}
+                  className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
                 {p.category && (
                   <Badge variant="secondary" className="absolute top-3 left-3 text-[10px] font-medium bg-background/80 backdrop-blur">
                     {p.category.name}

@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Zap, ShieldCheck, ShoppingCart, RefreshCw, Clock, Package, ShoppingBag } from "lucide-react";
 
+import { DEFAULT_PRODUCT_IMAGE, getProductImageUrl } from "@/lib/utils/product-image";
+
 export function ProductDetailClient({ product }: { product: any }) {
   const [modalOpen, setModalOpen] = useState(false);
   const price = Number(product.sellingPrice);
@@ -20,17 +22,14 @@ export function ProductDetailClient({ product }: { product: any }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
         {/* Left: Product Image / Mockup */}
         <div className="rounded-2xl border bg-card p-6 flex items-center justify-center min-h-[320px] relative overflow-hidden shadow-sm">
-          {product.image ? (
-            <img
-              src={product.image}
-              alt={product.name}
-              className="max-h-[300px] w-auto object-contain rounded-xl"
-            />
-          ) : (
-            <div className="flex h-32 w-32 items-center justify-center rounded-3xl bg-primary/10 text-primary font-black text-4xl">
-              {product.name.slice(0, 2).toUpperCase()}
-            </div>
-          )}
+          <img
+            src={getProductImageUrl(product.image)}
+            alt={product.name}
+            onError={(e) => {
+              e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+            }}
+            className="max-h-[300px] w-auto object-contain rounded-xl shadow-sm"
+          />
           {product.category && (
             <Badge variant="secondary" className="absolute top-4 left-4">
               {product.category.name}

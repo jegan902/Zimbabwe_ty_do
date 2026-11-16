@@ -38,7 +38,18 @@ export default function LoginPage() {
 
       toast.success("Đăng nhập thành công!");
       await refresh();
-      router.push("/");
+
+      const searchParams = new URLSearchParams(window.location.search);
+      const next = searchParams.get("next");
+      const loggedUser = data.data?.user;
+
+      if (next) {
+        router.push(next);
+      } else if (loggedUser?.role === "ADMIN" || loggedUser?.role === "SUPERADMIN") {
+        router.push("/admin");
+      } else {
+        router.push("/");
+      }
     } catch (err: any) {
       toast.error(err.message);
     } finally {

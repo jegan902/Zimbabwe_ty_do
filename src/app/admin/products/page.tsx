@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useRef, useCallback, useTransition } from "react";
 import {
   Package,
   Search,
@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import Link from "next/link";
+import { DEFAULT_PRODUCT_IMAGE, getProductImageUrl } from "@/lib/utils/product-image";
 
 interface ProductItem {
   id: string;
@@ -73,16 +74,38 @@ export default function AdminProductsPage() {
   });
 
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedSupplier, setSelectedSupplier] = useState("");
+  const [selectedSupplier, setSelectedSupplier] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedPricingMode, setSelectedPricingMode] = useState("ALL");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Ref to always track latest active filters so realtime updates and async callbacks never lose filter context
+  const filtersRef = useRef({
+    page: 1,
+    searchTerm: "",
+    selectedCategory: "",
+    selectedSupplier: "ALL",
+    selectedStatus: "ALL",
+    selectedPricingMode: "ALL",
+  });
+
+  useEffect(() => {
+    filtersRef.current = {
+      page,
+      searchTerm,
+      selectedCategory,
+      selectedSupplier,
+      selectedStatus,
+      selectedPricingMode,
+    };
+  }, [page, searchTerm, selectedCategory, selectedSupplier, selectedStatus, selectedPricingMode]);
 
   // Modal: Edit Price & Profit
   const [pricingModalProduct, setPricingModalProduct] = useState<ProductItem | null>(null);
@@ -124,6 +147,94 @@ export default function AdminProductsPage() {
     setSelectedIds([]);
   };
 
+  const fetchProducts = useCallback(
+    async (options?: {
+      silent?: boolean;
+      filters?: Partial<typeof filtersRef.current>;
+    }) => {
+      const silent = options?.silent ?? false;
+      const activeFilters = {
+        ...filtersRef.current,
+        ...(options?.filters || {}),
+      };
+
+      if (!silent) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
+      try {
+        const params = new URLSearchParams({
+          page: activeFilters.page.toString(),
+          limit: "25",
+          search: activeFilters.searchTerm,
+          categoryId: activeFilters.selectedCategory,
+          supplierId: activeFilters.selectedSupplier,
+          status: activeFilters.selectedStatus,
+          pricingMode: activeFilters.selectedPricingMode,
+        });
+
+        const res = await fetch(`/api/admin/products?${params.toString()}`);
+        const json = await res.json();
+        if (res.ok) {
+          setProducts(json.data.products || []);
+          setMetrics(
+            json.data.metrics || {
+              total: 0,
+              activeCount: 0,
+              outOfStockCount: 0,
+              autoPricingCount: 0,
+            }
+          );
+          setTotalPages(json.data.pagination?.totalPages || 1);
+          if (json.data.filterOptions) {
+            setCategories(json.data.filterOptions.categories || []);
+            setSuppliers(json.data.filterOptions.suppliers || []);
+          }
+        }
+      } catch {
+        // Ignored
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+        setIsRefreshing(false);
+      }
+    },
+    []
+  );
+
+  // Initial load
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
+
+  // Realtime SSE listener for automatic catalog updates without losing filters and without flickering table
+  useEffect(() => {
+    const source = new EventSource("/api/realtime");
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "product.synced" || data.type === "product.updated") {
+          // Silent fetch preserves active filters and does NOT trigger full table unmount/flicker
+          fetchProducts({ silent: true });
+          toast.info("Đã tự động cập nhật danh mục sản phẩm thời gian thực!", {
+            id: "realtime-product-sync",
+            duration: 2500,
+          });
+        }
+      } catch {}
+    };
+    return () => source.close();
+  }, [fetchProducts]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    fetchProducts({ filters: { page: 1, searchTerm } });
+  };
+
   const handleExecuteBulkAction = async (action: string, data?: any) => {
     if (selectedIds.length === 0) return;
     setActionLoading(`bulk-${action}`);
@@ -143,71 +254,12 @@ export default function AdminProductsPage() {
       if (action === "DELETE") {
         setSelectedIds([]);
       }
-      fetchProducts();
+      fetchProducts({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setActionLoading(null);
     }
-  };
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "25",
-        search: searchTerm,
-        categoryId: selectedCategory,
-        supplierId: selectedSupplier,
-        status: selectedStatus,
-        pricingMode: selectedPricingMode,
-      });
-
-      const res = await fetch(`/api/admin/products?${params.toString()}`);
-      const json = await res.json();
-      if (res.ok) {
-        setProducts(json.data.products || []);
-        setMetrics(json.data.metrics || { total: 0, activeCount: 0, outOfStockCount: 0, autoPricingCount: 0 });
-        setTotalPages(json.data.pagination?.totalPages || 1);
-        if (json.data.filterOptions) {
-          setCategories(json.data.filterOptions.categories || []);
-          setSuppliers(json.data.filterOptions.suppliers || []);
-        }
-      }
-    } catch {
-      // Ignored
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProducts();
-  }, [page, selectedCategory, selectedSupplier, selectedStatus, selectedPricingMode]);
-
-  // Realtime SSE listener for automatic catalog updates
-  useEffect(() => {
-    const source = new EventSource("/api/realtime");
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "product.synced" || data.type === "product.updated") {
-          fetchProducts();
-          toast.info("Đã tự động cập nhật danh mục sản phẩm thời gian thực!", {
-            id: "realtime-product-sync",
-            duration: 3000,
-          });
-        }
-      } catch {}
-    };
-    return () => source.close();
-  }, []);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPage(1);
-    fetchProducts();
   };
 
   // Quick Sync Single Product SKU
@@ -220,7 +272,7 @@ export default function AdminProductsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || json.error?.message || "Đồng bộ SKU thất bại");
       toast.success(json.message || "Đã đồng bộ SKU từ nhà cung cấp thành công!");
-      fetchProducts();
+      fetchProducts({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -228,10 +280,13 @@ export default function AdminProductsPage() {
     }
   };
 
-  // Toggle Active Status
+  // Toggle Active Status with in-place optimistic update
   const handleToggleStatus = async (product: ProductItem) => {
     const nextStatus = product.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     setActionLoading(`toggle-${product.id}`);
+    setProducts((prev) =>
+      prev.map((p) => (p.id === product.id ? { ...p, status: nextStatus } : p))
+    );
     try {
       const res = await fetch(`/api/admin/products/${product.id}`, {
         method: "PUT",
@@ -241,29 +296,40 @@ export default function AdminProductsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || json.error?.message || "Cập nhật trạng thái thất bại");
       toast.success(`Đã chuyển trạng thái sang ${nextStatus === "ACTIVE" ? "ĐANG BÁN" : "TẠM NGỪNG"}`);
-      fetchProducts();
+      fetchProducts({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
+      // Rollback
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, status: product.status } : p))
+      );
     } finally {
       setActionLoading(null);
     }
   };
 
-  // Toggle Hidden
+  // Toggle Hidden with in-place optimistic update
   const handleToggleHidden = async (product: ProductItem) => {
+    const nextHidden = !product.isHidden;
     setActionLoading(`hidden-${product.id}`);
+    setProducts((prev) =>
+      prev.map((p) => (p.id === product.id ? { ...p, isHidden: nextHidden } : p))
+    );
     try {
       const res = await fetch(`/api/admin/products/${product.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isHidden: !product.isHidden }),
+        body: JSON.stringify({ isHidden: nextHidden }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || json.error?.message || "Cập nhật hiển thị thất bại");
-      toast.success(product.isHidden ? "Đã hiện sản phẩm trên trang chủ" : "Đã ẩn sản phẩm khỏi trang chủ");
-      fetchProducts();
+      toast.success(nextHidden ? "Đã ẩn sản phẩm khỏi trang chủ" : "Đã hiện sản phẩm trên trang chủ");
+      fetchProducts({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, isHidden: product.isHidden } : p))
+      );
     } finally {
       setActionLoading(null);
     }
@@ -301,7 +367,7 @@ export default function AdminProductsPage() {
       if (!res.ok) throw new Error(json.message || json.error?.message || "Cập nhật giá bán thất bại");
       toast.success("Đã cập nhật giá bán & công thức biên lợi nhuận thành công!");
       setPricingModalProduct(null);
-      fetchProducts();
+      fetchProducts({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -327,7 +393,7 @@ export default function AdminProductsPage() {
       if (!res.ok) throw new Error(json.message || json.error?.message || "Lưu sản phẩm thất bại");
       toast.success(isCreate ? "Tạo sản phẩm mới thành công!" : "Đã cập nhật chi tiết sản phẩm!");
       setEditModalProduct(null);
-      fetchProducts();
+      fetchProducts({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -346,7 +412,7 @@ export default function AdminProductsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || json.error?.message || "Xóa sản phẩm thất bại");
       toast.success(json.message || "Đã xóa sản phẩm thành công!");
-      fetchProducts();
+      fetchProducts({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -374,7 +440,14 @@ export default function AdminProductsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black">Quản Lý Sản Phẩm & Giá Bán</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-black">Quản Lý Sản Phẩm & Giá Bán</h1>
+            {isRefreshing && (
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/30 bg-primary/5 animate-pulse gap-1 py-0.5 px-2">
+                <RefreshCw className="h-3 w-3 animate-spin" /> Đang cập nhật live...
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">
             Theo dõi danh mục sản phẩm số, cấu hình biên lợi nhuận tự động và liên kết nguồn hàng từ nhà cung cấp.
           </p>
@@ -459,18 +532,34 @@ export default function AdminProductsPage() {
               placeholder="Tìm theo tên sản phẩm, slug hoặc mã SKU nhà cung cấp..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 text-xs"
+              className="pl-9 pr-8 h-9 text-xs"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setPage(1);
+                  fetchProducts({ filters: { page: 1, searchTerm: "" } });
+                }}
+                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                title="Xóa tìm kiếm"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={selectedCategory}
               onChange={(e) => {
-                setSelectedCategory(e.target.value);
+                const val = e.target.value;
+                setSelectedCategory(val);
                 setPage(1);
+                fetchProducts({ filters: { page: 1, selectedCategory: val } });
               }}
-              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold"
+              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold cursor-pointer"
             >
               <option value="">Tất cả danh mục</option>
               {categories.map((c) => (
@@ -483,10 +572,12 @@ export default function AdminProductsPage() {
             <select
               value={selectedSupplier}
               onChange={(e) => {
-                setSelectedSupplier(e.target.value);
+                const val = e.target.value;
+                setSelectedSupplier(val);
                 setPage(1);
+                fetchProducts({ filters: { page: 1, selectedSupplier: val } });
               }}
-              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold"
+              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold cursor-pointer"
             >
               <option value="ALL">Tất cả nhà cung cấp</option>
               {suppliers.map((s) => (
@@ -499,10 +590,12 @@ export default function AdminProductsPage() {
             <select
               value={selectedStatus}
               onChange={(e) => {
-                setSelectedStatus(e.target.value);
+                const val = e.target.value;
+                setSelectedStatus(val);
                 setPage(1);
+                fetchProducts({ filters: { page: 1, selectedStatus: val } });
               }}
-              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold"
+              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold cursor-pointer"
             >
               <option value="ALL">Tất cả trạng thái</option>
               <option value="ACTIVE">Đang mở bán (ACTIVE)</option>
@@ -513,17 +606,19 @@ export default function AdminProductsPage() {
             <select
               value={selectedPricingMode}
               onChange={(e) => {
-                setSelectedPricingMode(e.target.value);
+                const val = e.target.value;
+                setSelectedPricingMode(val);
                 setPage(1);
+                fetchProducts({ filters: { page: 1, selectedPricingMode: val } });
               }}
-              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold"
+              className="h-9 rounded-lg border bg-background px-3 text-xs font-semibold cursor-pointer"
             >
               <option value="ALL">Cơ chế giá</option>
               <option value="AUTO">Giá tự động (AUTO)</option>
               <option value="MANUAL">Ghim thủ công (MANUAL)</option>
             </select>
 
-            <Button type="submit" size="sm" className="h-9 px-4 text-xs font-bold">
+            <Button type="submit" size="sm" className="h-9 px-4 text-xs font-bold cursor-pointer">
               Tìm kiếm
             </Button>
           </div>
@@ -662,7 +757,7 @@ export default function AdminProductsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {loading ? (
+              {loading && products.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-16 text-center text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
@@ -702,11 +797,14 @@ export default function AdminProductsPage() {
                       <td className="py-3.5 px-4">
                         <div className="flex items-start gap-3">
                           <div className="h-10 w-10 rounded-xl bg-muted/80 border shrink-0 flex items-center justify-center overflow-hidden font-bold text-muted-foreground">
-                            {p.image ? (
-                              <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <Package className="h-5 w-5 text-muted-foreground/60" />
-                            )}
+                            <img
+                              src={getProductImageUrl(p.image)}
+                              alt={p.name}
+                              onError={(e) => {
+                                e.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                              }}
+                              className="h-full w-full object-cover"
+                            />
                           </div>
                           <div className="space-y-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -905,8 +1003,12 @@ export default function AdminProductsPage() {
                 variant="outline"
                 size="sm"
                 disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="h-7 text-xs font-semibold"
+                onClick={() => {
+                  const newPage = Math.max(1, page - 1);
+                  setPage(newPage);
+                  fetchProducts({ filters: { page: newPage } });
+                }}
+                className="h-7 text-xs font-semibold cursor-pointer"
               >
                 Trang trước
               </Button>
@@ -914,8 +1016,12 @@ export default function AdminProductsPage() {
                 variant="outline"
                 size="sm"
                 disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="h-7 text-xs font-semibold"
+                onClick={() => {
+                  const newPage = Math.min(totalPages, page + 1);
+                  setPage(newPage);
+                  fetchProducts({ filters: { page: newPage } });
+                }}
+                className="h-7 text-xs font-semibold cursor-pointer"
               >
                 Trang sau
               </Button>

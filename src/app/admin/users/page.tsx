@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   User,
   Users,
@@ -39,11 +39,28 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>({});
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [roleFilter, setRoleFilter] = useState("ALL");
+
+  const filtersRef = useRef({
+    page: 1,
+    statusFilter: "ALL",
+    roleFilter: "ALL",
+    search: "",
+  });
+
+  useEffect(() => {
+    filtersRef.current = {
+      page,
+      statusFilter,
+      roleFilter,
+      search,
+    };
+  }, [page, statusFilter, roleFilter, search]);
 
   // Detail Modal State
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -64,41 +81,76 @@ export default function AdminUsersPage() {
   const [adjustReason, setAdjustReason] = useState("");
   const [adjusting, setAdjusting] = useState(false);
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "15",
-        search,
-        status: statusFilter,
-        role: roleFilter,
-      });
+  const fetchUsers = useCallback(
+    async (options?: {
+      silent?: boolean;
+      filters?: Partial<typeof filtersRef.current>;
+    }) => {
+      const silent = options?.silent ?? false;
+      const activeFilters = {
+        ...filtersRef.current,
+        ...(options?.filters || {}),
+      };
 
-      const res = await fetch(`/api/admin/users?${params.toString()}`);
-      const json = await res.json();
-      if (res.ok) {
-        setUsers(json.data?.items || []);
-        setSummary(json.data?.summary || {});
-        setTotalPages(json.data?.pagination?.totalPages || 1);
+      if (!silent) {
+        setLoading(true);
       } else {
-        toast.error(json.error?.message || "Không thể tải danh sách khách hàng");
+        setIsRefreshing(true);
       }
-    } catch {
-      toast.error("Lỗi kết nối khi tải danh sách");
-    } finally {
-      setLoading(false);
-    }
-  };
 
+      try {
+        const params = new URLSearchParams({
+          page: activeFilters.page.toString(),
+          limit: "15",
+          search: activeFilters.search,
+          status: activeFilters.statusFilter,
+          role: activeFilters.roleFilter,
+        });
+
+        const res = await fetch(`/api/admin/users?${params.toString()}`);
+        const json = await res.json();
+        if (res.ok) {
+          setUsers(json.data?.items || []);
+          setSummary(json.data?.summary || {});
+          setTotalPages(json.data?.pagination?.totalPages || 1);
+        } else {
+          toast.error(json.error?.message || "Không thể tải danh sách khách hàng");
+        }
+      } catch {
+        toast.error("Lỗi kết nối khi tải danh sách");
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+        setIsRefreshing(false);
+      }
+    },
+    []
+  );
+
+  // Initial load
   useEffect(() => {
     fetchUsers();
-  }, [page, statusFilter, roleFilter]);
+  }, [fetchUsers]);
+
+  // Realtime SSE listener for user/wallet updates without losing filters and without flickering table
+  useEffect(() => {
+    const source = new EventSource("/api/realtime");
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "wallet.updated") {
+          fetchUsers({ silent: true });
+        }
+      } catch {}
+    };
+    return () => source.close();
+  }, [fetchUsers]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    fetchUsers();
+    fetchUsers({ filters: { page: 1, search } });
   };
 
   const openUserDetail = async (userId: string, defaultTab = "profile") => {
@@ -151,7 +203,7 @@ export default function AdminUsersPage() {
       if (!res.ok) throw new Error(json.error?.message || "Lỗi cập nhật");
 
       toast.success("Cập nhật thông tin khách hàng thành công!");
-      fetchUsers();
+      fetchUsers({ silent: true });
       openUserDetail(selectedUserId, activeTab);
     } catch (err: any) {
       toast.error(err.message);
@@ -191,7 +243,7 @@ export default function AdminUsersPage() {
       toast.success(json.data?.message || "Điều chỉnh số dư thành công!");
       setAdjustAmount("");
       setAdjustReason("");
-      fetchUsers();
+      fetchUsers({ silent: true });
       openUserDetail(selectedUserId, "ledger");
     } catch (err: any) {
       toast.error(err.message);
@@ -209,6 +261,11 @@ export default function AdminUsersPage() {
 
     if (!confirm(confirmMsg)) return;
 
+    // Optimistic update
+    setUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? { ...u, status: nextStatus } : u))
+    );
+
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, {
         method: "PATCH",
@@ -219,9 +276,10 @@ export default function AdminUsersPage() {
       if (!res.ok) throw new Error(json.error?.message || "Lỗi thay đổi trạng thái");
 
       toast.success(`Đã chuyển trạng thái sang ${nextStatus}`);
-      fetchUsers();
+      fetchUsers({ silent: true });
     } catch (err: any) {
       toast.error(err.message);
+      fetchUsers({ silent: true });
     }
   };
 
@@ -230,7 +288,14 @@ export default function AdminUsersPage() {
       {/* Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black">Quản Lý Khách Hàng</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black">Quản Lý Khách Hàng</h1>
+            {isRefreshing && (
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/30 animate-pulse">
+                Đang cập nhật live...
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">
             Tra cứu hồ sơ khách hàng, số dư ví, lịch sử nạp, đơn mua và điều chỉnh số dư tài khoản.
           </p>
@@ -238,11 +303,11 @@ export default function AdminUsersPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => fetchUsers()}
-          disabled={loading}
+          onClick={() => fetchUsers({ silent: true })}
+          disabled={loading || isRefreshing}
           className="h-8 text-xs font-semibold gap-1.5"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing || loading ? "animate-spin" : ""}`} />
           Làm mới
         </Button>
       </div>
@@ -300,8 +365,21 @@ export default function AdminUsersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm theo email, tên khách hàng hoặc ID..."
-            className="pl-9 h-9 text-xs"
+            className="pl-9 pr-8 h-9 text-xs"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setPage(1);
+                fetchUsers({ filters: { page: 1, search: "" } });
+              }}
+              className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground text-xs"
+            >
+              ✕
+            </button>
+          )}
         </form>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -309,8 +387,10 @@ export default function AdminUsersPage() {
           <select
             value={statusFilter}
             onChange={(e) => {
-              setStatusFilter(e.target.value);
+              const val = e.target.value;
+              setStatusFilter(val);
               setPage(1);
+              fetchUsers({ filters: { page: 1, statusFilter: val } });
             }}
             aria-label="Lọc theo trạng thái"
             className="h-9 px-3 rounded-lg border bg-background text-xs font-semibold text-foreground focus:ring-1 focus:ring-primary"
@@ -325,8 +405,10 @@ export default function AdminUsersPage() {
           <select
             value={roleFilter}
             onChange={(e) => {
-              setRoleFilter(e.target.value);
+              const val = e.target.value;
+              setRoleFilter(val);
               setPage(1);
+              fetchUsers({ filters: { page: 1, roleFilter: val } });
             }}
             aria-label="Lọc theo vai trò"
             className="h-9 px-3 rounded-lg border bg-background text-xs font-semibold text-foreground focus:ring-1 focus:ring-primary"
@@ -340,7 +422,7 @@ export default function AdminUsersPage() {
 
       {/* Users Table */}
       <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
-        {loading ? (
+        {loading && users.length === 0 ? (
           <div className="py-20 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
@@ -457,7 +539,11 @@ export default function AdminUsersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => {
+                  const p = Math.max(1, page - 1);
+                  setPage(p);
+                  fetchUsers({ filters: { page: p } });
+                }}
                 disabled={page <= 1}
                 className="h-7 text-xs"
               >
@@ -466,7 +552,11 @@ export default function AdminUsersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => {
+                  const p = Math.min(totalPages, page + 1);
+                  setPage(p);
+                  fetchUsers({ filters: { page: p } });
+                }}
                 disabled={page >= totalPages}
                 className="h-7 text-xs"
               >

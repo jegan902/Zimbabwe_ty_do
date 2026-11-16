@@ -5,6 +5,13 @@ export default function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
       <h1 className="text-4xl font-black">404</h1>
+      <img
+        src="/images/404.jpg"
+        alt="404"
+        width={250}
+        height={250}
+        style={{ display: "block", border: "1px solid red" }}
+      />
       <h2 className="text-lg font-bold">Không tìm thấy trang</h2>
       <p className="text-xs text-muted-foreground max-w-sm">
         Trang bạn đang tìm kiếm không tồn tại hoặc đã được di chuyển.

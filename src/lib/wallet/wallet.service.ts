@@ -474,4 +474,68 @@ export async function listWalletTransactions(
   };
 }
 
+/**
+ * Allows administrators to manually adjust a user's wallet balance (credit or debit).
+ * Guaranteed to be ACID-compliant with row lock and full ledger audit entry.
+ */
+export async function adjustWalletBalance(params: {
+  userId: string;
+  amount: Prisma.Decimal | string;
+  operation: "ADD" | "SUBTRACT";
+  reason: string;
+  actorId?: string;
+}): Promise<WalletSnapshot> {
+  const amount = roundMoney(params.amount.toString());
+  if (!amount.isPositive()) throw new ConflictError("Số tiền điều chỉnh phải lớn hơn 0");
+
+  const snapshot = await prisma.$transaction(async (tx) => {
+    const wallet = await lockWallet(tx, params.userId);
+    const before = d(wallet.balance.toString());
+    const reservedBefore = d(wallet.reservedBalance.toString());
+
+    let after: ReturnType<typeof d>;
+    if (params.operation === "ADD") {
+      after = before.plus(amount);
+    } else {
+      const available = before.minus(reservedBefore);
+      if (amount.greaterThan(available)) {
+        throw new InsufficientFundsError(
+          `Số dư khả dụng không đủ để trừ tiền. Hiện có ${money(available)}đ`
+        );
+      }
+      after = before.minus(amount);
+    }
+
+    const updated = await tx.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        balance: after.toFixed(2),
+      },
+    });
+
+    await ledger(tx, {
+      walletId: wallet.id,
+      userId: params.userId,
+      transactionType: "ADJUSTMENT",
+      amount,
+      balanceBefore: before,
+      balanceAfter: after,
+      reservedBefore,
+      reservedAfter: reservedBefore,
+      description: `[Điều chỉnh admin] ${params.operation === "ADD" ? "+ " : "- "}${money(amount)}đ: ${params.reason}`,
+      referenceId: params.actorId ?? null,
+    });
+
+    return toSnapshot(updated);
+  });
+
+  pushEvent({
+    type: "wallet.updated",
+    userId: params.userId,
+    payload: { availableBalance: snapshot.availableBalance },
+  });
+
+  return snapshot;
+}
+
 export { toSnapshot as walletSnapshot, computeProfit };

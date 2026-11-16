@@ -19,6 +19,8 @@ import {
   Zap,
   LogOut,
   UserCheck,
+  Users,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -167,10 +169,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems = [
     { href: "/admin", label: "Tổng quan Dashboard", icon: LayoutDashboard },
-    { href: "/admin/suppliers", label: "Nhà cung cấp & Vốn", icon: Truck },
-    { href: "/admin/products", label: "Quản lý sản phẩm", icon: Package },
-    { href: "/admin/sync", label: "Trung tâm đồng bộ", icon: RefreshCw },
+    { href: "/admin/users", label: "Quản lý khách hàng", icon: Users },
+    { href: "/admin/deposits", label: "Giao dịch nạp tiền", icon: CreditCard },
     { href: "/admin/orders", label: "Quản lý đơn & Đối soát", icon: ShoppingBag },
+    { href: "/admin/products", label: "Quản lý sản phẩm", icon: Package },
+    { href: "/admin/suppliers", label: "Nhà cung cấp & Vốn", icon: Truck },
+    { href: "/admin/sync", label: "Trung tâm đồng bộ", icon: RefreshCw },
   ];
 
   return (

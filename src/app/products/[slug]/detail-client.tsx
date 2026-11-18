@@ -4,9 +4,20 @@ import { useState } from "react";
 import { BuyModal } from "@/components/portal/buy-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Zap, ShieldCheck, ShoppingCart, RefreshCw, Clock, Package, ShoppingBag } from "lucide-react";
+import {
+  Zap,
+  ShieldCheck,
+  ShoppingCart,
+  RefreshCw,
+  Clock,
+  Package,
+  ShoppingBag,
+} from "lucide-react";
 
-import { DEFAULT_PRODUCT_IMAGE, getProductImageUrl } from "@/lib/utils/product-image";
+import {
+  DEFAULT_PRODUCT_IMAGE,
+  getProductImageUrl,
+} from "@/lib/utils/product-image";
 
 export function ProductDetailClient({ product }: { product: any }) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -48,7 +59,9 @@ export function ProductDetailClient({ product }: { product: any }) {
                 <Clock className="h-3 w-3" /> Giao hàng tự động tức thì
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black leading-tight">{product.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-black leading-tight">
+              {product.name}
+            </h1>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -56,18 +69,24 @@ export function ProductDetailClient({ product }: { product: any }) {
               <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <Package className="h-3.5 w-3.5" /> Còn lại
               </span>
-              <div className="mt-1 text-lg font-black text-foreground">{stockLabel}</div>
+              <div className="mt-1 text-lg font-black text-foreground">
+                {stockLabel}
+              </div>
             </div>
             <div className="rounded-xl border bg-card p-3">
               <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                 <ShoppingBag className="h-3.5 w-3.5" /> Đã bán
               </span>
-              <div className="mt-1 text-lg font-black text-foreground">{soldLabel}</div>
+              <div className="mt-1 text-lg font-black text-foreground">
+                {soldLabel}
+              </div>
             </div>
           </div>
 
           <div className="rounded-xl bg-primary/5 border border-primary/20 p-4">
-            <span className="text-xs text-muted-foreground font-medium block">Giá bán công khai</span>
+            <span className="text-xs text-muted-foreground font-medium block">
+              Giá bán công khai
+            </span>
             <div className="text-3xl font-black text-primary mt-1">
               {price.toLocaleString("vi-VN")}đ
             </div>
@@ -92,13 +111,16 @@ export function ProductDetailClient({ product }: { product: any }) {
 
           <div className="border-t pt-4 space-y-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-500" /> Nhận tài khoản dạng (username | password) ngay sau thanh toán
+              <Zap className="h-4 w-4 text-amber-500" /> Nhận tài khoản dạng
+              (username | password) ngay sau thanh toán
             </div>
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" /> Bảo mật thông tin đăng nhập bằng chuẩn AES-256
+              <ShieldCheck className="h-4 w-4 text-emerald-500" /> Bảo mật thông
+              tin đăng nhập bằng chuẩn
             </div>
             <div className="flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 text-blue-500" /> Tự động đối soát và hoàn tiền nếu nhà cung cấp xảy ra lỗi
+              <RefreshCw className="h-4 w-4 text-blue-500" /> Tự động đối soát
+              và hoàn tiền nếu nhà cung cấp xảy ra lỗi
             </div>
           </div>
         </div>
@@ -108,7 +130,8 @@ export function ProductDetailClient({ product }: { product: any }) {
       <div className="mt-12 rounded-2xl border bg-card p-6 sm:p-8 space-y-4">
         <h2 className="text-lg font-bold">Mô tả chi tiết sản phẩm</h2>
         <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-          {product.description || "Tài khoản số bàn giao tự động, chất lượng cao, kích hoạt sẵn."}
+          {product.description ||
+            "Tài khoản số bàn giao tự động, chất lượng cao, kích hoạt sẵn."}
         </div>
       </div>
 
@@ -120,4 +143,3 @@ export function ProductDetailClient({ product }: { product: any }) {
     </>
   );
 }
-

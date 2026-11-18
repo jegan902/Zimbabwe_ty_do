@@ -2,7 +2,14 @@ import Link from "next/link";
 import { getCategories, getProducts } from "@/lib/services/catalog.service";
 import { ProductGrid } from "@/components/portal/product-grid";
 import { CatalogRealtime } from "@/components/portal/catalog-realtime";
-import { Zap, ShieldCheck, CreditCard, ChevronRight, Sparkles, Layers } from "lucide-react";
+import {
+  Zap,
+  ShieldCheck,
+  CreditCard,
+  ChevronRight,
+  Sparkles,
+  Layers,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +28,17 @@ export default async function HomePage() {
         <div className="container mx-auto px-4 sm:px-8">
           <div className="max-w-3xl mx-auto text-center space-y-4">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              <Sparkles className="h-3.5 w-3.5" /> Nền tảng phân phối tài khoản số tự động đa nhà cung cấp
+              <Sparkles className="h-3.5 w-3.5" /> Nền tảng phân phối tài khoản
+              số tự động đa nhà cung cấp
             </div>
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground leading-tight">
-              Mua Tài Khoản Số Uy Tín, <span className="text-primary">Giao Dịch Tự Động 24/7</span>
+              Mua Tài Khoản Số Uy Tín,{" "}
+              <span className="text-primary">Giao Dịch Tự Động 24/7</span>
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Hệ thống trung gian kết nối trực tiếp với nhiều nhà cung cấp hàng đầu. Tự động kiểm tra giá nhập, trừ tiền ví thông minh và trả thông tin tài khoản ngay lập tức.
+              Hệ thống trung gian kết nối trực tiếp với nhiều nhà cung cấp hàng
+              đầu. Tự động kiểm tra giá nhập, trừ tiền ví thông minh và trả
+              thông tin tài khoản ngay lập tức.
             </p>
             <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
               <Button size="lg" asChild className="font-bold shadow-md">
@@ -35,8 +46,13 @@ export default async function HomePage() {
                   Khám phá sản phẩm <ChevronRight className="ml-1 h-4 w-4" />
                 </Link>
               </Button>
-              <Button size="lg" variant="outline" asChild className="font-medium">
-                <Link href="/wallet">Nạp tiền VietQR</Link>
+              <Button
+                size="lg"
+                variant="outline"
+                asChild
+                className="font-medium"
+              >
+                <Link href="/wallet">Nạp tiền </Link>
               </Button>
             </div>
           </div>
@@ -48,8 +64,12 @@ export default async function HomePage() {
                 <Zap className="h-5 w-5" />
               </div>
               <div>
-                <h4 className="font-bold text-xs sm:text-sm">Bàn giao tức thì</h4>
-                <p className="text-[11px] text-muted-foreground">Có tài khoản ngay sau khi bấm thanh toán</p>
+                <h4 className="font-bold text-xs sm:text-sm">
+                  Bàn giao tức thì
+                </h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Có tài khoản ngay sau khi bấm thanh toán
+                </p>
               </div>
             </div>
 
@@ -58,8 +78,12 @@ export default async function HomePage() {
                 <CreditCard className="h-5 w-5" />
               </div>
               <div>
-                <h4 className="font-bold text-xs sm:text-sm">Nạp ví VietQR tiện lợi</h4>
-                <p className="text-[11px] text-muted-foreground">Quét mã QR tự động cộng tiền sau 5 giây</p>
+                <h4 className="font-bold text-xs sm:text-sm">
+                  Nạp ví QR tiện lợi
+                </h4>
+                <p className="text-[11px] text-muted-foreground">
+                  Quét mã QR tự động cộng tiền sau 5 giây
+                </p>
               </div>
             </div>
 
@@ -69,7 +93,9 @@ export default async function HomePage() {
               </div>
               <div>
                 <h4 className="font-bold text-xs sm:text-sm">Bảo mật mã hóa</h4>
-                <p className="text-[11px] text-muted-foreground">Mã hóa AES-256 dữ liệu nhạy cảm</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Mã hóa dữ liệu nhạy cảm
+                </p>
               </div>
             </div>
           </div>
@@ -83,7 +109,10 @@ export default async function HomePage() {
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Layers className="h-5 w-5 text-primary" /> Danh mục sản phẩm
             </h2>
-            <Link href="/products" className="text-xs font-semibold text-primary hover:underline flex items-center">
+            <Link
+              href="/products"
+              className="text-xs font-semibold text-primary hover:underline flex items-center"
+            >
               Xem tất cả <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -108,8 +137,12 @@ export default async function HomePage() {
       <section className="container mx-auto px-4 sm:px-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight">Sản phẩm mới cập nhật</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Giá bán tự động cập nhật liên tục từ nhà cung cấp</p>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+              Sản phẩm mới cập nhật
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Giá bán tự động cập nhật liên tục từ nhà cung cấp
+            </p>
           </div>
           <Button variant="outline" size="sm" asChild>
             <Link href="/products">Xem tất cả</Link>

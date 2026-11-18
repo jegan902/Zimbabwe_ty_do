@@ -27,12 +27,17 @@ export function OrdersListClient() {
       }
     }
 
-    if (user) {
-      fetchOrders();
+    if (!user) {
+      setOrders([]);
+      setLoading(false);
+      return;
     }
+
+    setLoading(true);
+    fetchOrders();
   }, [user]);
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -45,10 +50,20 @@ export function OrdersListClient() {
       <div className="rounded-2xl border p-12 text-center space-y-4 bg-card">
         <ShoppingBag className="mx-auto h-12 w-12 text-muted-foreground" />
         <h3 className="text-lg font-bold">Vui lòng đăng nhập</h3>
-        <p className="text-xs text-muted-foreground">Bạn cần đăng nhập để xem lịch sử đơn hàng của mình.</p>
+        <p className="text-xs text-muted-foreground">
+          Bạn cần đăng nhập để xem lịch sử đơn hàng của mình.
+        </p>
         <Button asChild>
           <Link href="/login?next=/orders">Đăng nhập ngay</Link>
         </Button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -58,7 +73,9 @@ export function OrdersListClient() {
       <div className="rounded-2xl border border-dashed p-12 text-center space-y-3 bg-card">
         <ShoppingBag className="mx-auto h-12 w-12 text-muted-foreground/60 stroke-[1.5]" />
         <h3 className="text-base font-semibold">Chưa có đơn hàng nào</h3>
-        <p className="text-xs text-muted-foreground">Bạn chưa thực hiện giao dịch mua tài khoản nào.</p>
+        <p className="text-xs text-muted-foreground">
+          Bạn chưa thực hiện giao dịch mua tài khoản nào.
+        </p>
         <Button asChild size="sm" className="mt-2">
           <Link href="/products">Mua sản phẩm ngay</Link>
         </Button>
@@ -71,13 +88,32 @@ export function OrdersListClient() {
       case "SUCCESS":
         return <Badge className="bg-emerald-600 text-[10px]">Thành công</Badge>;
       case "FAILED":
-        return <Badge variant="destructive" className="text-[10px]">Thất bại</Badge>;
+        return (
+          <Badge variant="destructive" className="text-[10px]">
+            Thất bại
+          </Badge>
+        );
       case "RECONCILIATION":
-        return <Badge variant="secondary" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px]">Chờ đối soát</Badge>;
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px]"
+          >
+            Chờ đối soát
+          </Badge>
+        );
       case "PROCESSING":
-        return <Badge variant="secondary" className="text-[10px]">Đang xử lý</Badge>;
+        return (
+          <Badge variant="secondary" className="text-[10px]">
+            Đang xử lý
+          </Badge>
+        );
       default:
-        return <Badge variant="outline" className="text-[10px]">{status}</Badge>;
+        return (
+          <Badge variant="outline" className="text-[10px]">
+            {status}
+          </Badge>
+        );
     }
   };
 
@@ -114,7 +150,12 @@ export function OrdersListClient() {
                 </td>
                 <td className="py-3 px-4">{getStatusBadge(o.status)}</td>
                 <td className="py-3 px-4 text-right">
-                  <Button variant="ghost" size="sm" asChild className="h-7 text-xs font-semibold gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    asChild
+                    className="h-7 text-xs font-semibold gap-1"
+                  >
                     <Link href={`/orders/${o.orderCode}`}>
                       <Eye className="h-3.5 w-3.5" /> Xem
                     </Link>
@@ -128,4 +169,3 @@ export function OrdersListClient() {
     </div>
   );
 }
-

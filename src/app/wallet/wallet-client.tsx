@@ -102,7 +102,10 @@ export function WalletClient() {
       : Date.now() + 5 * 60 * 1000;
 
     const updateTimer = () => {
-      const remainingSec = Math.max(0, Math.floor((targetTime - Date.now()) / 1000));
+      const remainingSec = Math.max(
+        0,
+        Math.floor((targetTime - Date.now()) / 1000),
+      );
       setTimeLeft(remainingSec);
 
       if (remainingSec <= 0) {
@@ -123,7 +126,9 @@ export function WalletClient() {
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(`/api/wallet/deposit?code=${depositData.paymentCode}`);
+        const res = await fetch(
+          `/api/wallet/deposit?code=${depositData.paymentCode}`,
+        );
         if (!res.ok) return;
         const data = await res.json();
         const txn = data.data?.transaction;
@@ -160,7 +165,9 @@ export function WalletClient() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message || "Không thể tạo yêu cầu nạp tiền");
+        throw new Error(
+          data.error?.message || "Không thể tạo yêu cầu nạp tiền",
+        );
       }
       setDepositData(data.data);
       setIsExpired(false);
@@ -198,7 +205,9 @@ export function WalletClient() {
       <div className="rounded-2xl border p-12 text-center space-y-4 bg-card">
         <Wallet className="mx-auto h-12 w-12 text-muted-foreground" />
         <h3 className="text-lg font-bold">Vui lòng đăng nhập</h3>
-        <p className="text-xs text-muted-foreground">Bạn cần đăng nhập để xem thông tin ví và nạp tiền.</p>
+        <p className="text-xs text-muted-foreground">
+          Bạn cần đăng nhập để xem thông tin ví và nạp tiền.
+        </p>
         <Button asChild>
           <Link href="/login?next=/wallet">Đăng nhập ngay</Link>
         </Button>
@@ -253,11 +262,13 @@ export function WalletClient() {
         <div className="md:col-span-5 rounded-2xl border bg-card p-6 shadow-sm space-y-5">
           <div className="flex items-center gap-2 border-b pb-3">
             <QrCode className="h-5 w-5 text-primary" />
-            <h3 className="font-bold text-base">Tạo yêu cầu nạp tiền VietQR</h3>
+            <h3 className="font-bold text-base">Tạo yêu cầu nạp tiền QR</h3>
           </div>
 
           <div className="space-y-3">
-            <label className="text-xs font-semibold text-muted-foreground">Chọn nhanh số tiền nạp</label>
+            <label className="text-xs font-semibold text-muted-foreground">
+              Chọn nhanh số tiền nạp
+            </label>
             <div className="grid grid-cols-3 gap-2">
               {PRESET_AMOUNTS.map((val) => (
                 <button
@@ -276,7 +287,9 @@ export function WalletClient() {
             </div>
 
             <div className="space-y-1.5 pt-2">
-              <label className="text-xs font-semibold text-muted-foreground">Hoặc nhập số tiền tùy chọn (VNĐ)</label>
+              <label className="text-xs font-semibold text-muted-foreground">
+                Hoặc nhập số tiền tùy chọn (VNĐ)
+              </label>
               <Input
                 type="number"
                 min={10000}
@@ -293,7 +306,9 @@ export function WalletClient() {
               disabled={creatingIntent || !amount || amount < 10000}
               className="w-full font-bold shadow-md h-10 mt-2"
             >
-              {creatingIntent && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {creatingIntent && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
               Tạo mã QR Chuyển Khoản
             </Button>
           </div>
@@ -307,9 +322,15 @@ export function WalletClient() {
                 <CheckCircle2 className="h-10 w-10 text-emerald-600" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-xl font-black text-foreground">Nạp tiền thành công!</h4>
+                <h4 className="text-xl font-black text-foreground">
+                  Nạp tiền thành công!
+                </h4>
                 <p className="text-xs text-muted-foreground">
-                  Giao dịch <strong className="font-mono text-primary">{depositData?.paymentCode}</strong> đã được hệ thống ghi nhận và cộng tiền vào ví.
+                  Giao dịch{" "}
+                  <strong className="font-mono text-primary">
+                    {depositData?.paymentCode}
+                  </strong>{" "}
+                  đã được hệ thống ghi nhận và cộng tiền vào ví.
                 </p>
               </div>
               <Button
@@ -328,9 +349,16 @@ export function WalletClient() {
                 <AlertTriangle className="h-10 w-10 text-destructive" />
               </div>
               <div className="space-y-1.5 max-w-sm mx-auto">
-                <h4 className="text-lg font-black text-destructive">Giao dịch đã quá 5 phút và tự động hủy</h4>
+                <h4 className="text-lg font-black text-destructive">
+                  Giao dịch đã quá 5 phút và tự động hủy
+                </h4>
                 <p className="text-xs text-muted-foreground">
-                  Mã QR chuyển khoản <strong className="font-mono text-foreground">{depositData?.paymentCode}</strong> đã hết hạn. Vui lòng không tiếp tục chuyển khoản vào mã này để tránh sự cố.
+                  Mã QR chuyển khoản{" "}
+                  <strong className="font-mono text-foreground">
+                    {depositData?.paymentCode}
+                  </strong>{" "}
+                  đã hết hạn. Vui lòng không tiếp tục chuyển khoản vào mã này để
+                  tránh sự cố.
                 </p>
               </div>
               <div className="pt-2">
@@ -350,7 +378,9 @@ export function WalletClient() {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm">Quét mã VietQR chuyển khoản</span>
+                  <span className="font-bold text-sm">
+                    Quét mã QR chuyển khoản
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
@@ -364,7 +394,12 @@ export function WalletClient() {
                     title="Thời gian hiệu lực của mã QR này"
                   >
                     <Clock className="h-3.5 w-3.5 shrink-0" />
-                    <span>Hết hạn: <strong className="text-sm">{formatCountdown(timeLeft)}</strong></span>
+                    <span>
+                      Hết hạn:{" "}
+                      <strong className="text-sm">
+                        {formatCountdown(timeLeft)}
+                      </strong>
+                    </span>
                   </div>
 
                   <Button
@@ -374,11 +409,20 @@ export function WalletClient() {
                     disabled={cancelling}
                     className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 px-2"
                   >
-                    {cancelling ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                    {cancelling ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <XCircle className="h-3 w-3" />
+                    )}
                     Hủy yêu cầu
                   </Button>
 
-                  <Button size="sm" variant="ghost" onClick={refresh} className="h-7 text-xs gap-1 px-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={refresh}
+                    className="h-7 text-xs gap-1 px-2"
+                  >
                     <RefreshCw className="h-3 w-3" /> Kiểm tra số dư
                   </Button>
                 </div>
@@ -396,20 +440,33 @@ export function WalletClient() {
                 <div className="space-y-2 text-xs flex-1 w-full">
                   <div className="rounded-lg bg-muted/50 p-2 border flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] text-muted-foreground block">Ngân hàng</span>
-                      <span className="font-bold">MB Bank ({depositData.bankInfo.bankBin})</span>
+                      <span className="text-[10px] text-muted-foreground block">
+                        Ngân hàng
+                      </span>
+                      <span className="font-bold">
+                        MB Bank ({depositData.bankInfo.bankBin})
+                      </span>
                     </div>
                   </div>
 
                   <div className="rounded-lg bg-muted/50 p-2 border flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] text-muted-foreground block">Số tài khoản</span>
-                      <span className="font-bold select-all">{depositData.bankInfo.accountNumber}</span>
+                      <span className="text-[10px] text-muted-foreground block">
+                        Số tài khoản
+                      </span>
+                      <span className="font-bold select-all">
+                        {depositData.bankInfo.accountNumber}
+                      </span>
                     </div>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => copyText(depositData.bankInfo.accountNumber, "số tài khoản")}
+                      onClick={() =>
+                        copyText(
+                          depositData.bankInfo.accountNumber,
+                          "số tài khoản",
+                        )
+                      }
                       className="h-7 w-7 p-0"
                     >
                       <Copy className="h-3 w-3" />
@@ -418,8 +475,12 @@ export function WalletClient() {
 
                   <div className="rounded-lg bg-muted/50 p-2 border flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] text-muted-foreground block">Chủ tài khoản</span>
-                      <span className="font-bold uppercase">{depositData.bankInfo.accountName}</span>
+                      <span className="text-[10px] text-muted-foreground block">
+                        Chủ tài khoản
+                      </span>
+                      <span className="font-bold uppercase">
+                        {depositData.bankInfo.accountName}
+                      </span>
                     </div>
                   </div>
 
@@ -435,7 +496,12 @@ export function WalletClient() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => copyText(depositData.paymentCode, "nội dung chuyển khoản")}
+                      onClick={() =>
+                        copyText(
+                          depositData.paymentCode,
+                          "nội dung chuyển khoản",
+                        )
+                      }
                       className="h-8 gap-1 text-xs font-bold"
                     >
                       <Copy className="h-3 w-3" /> Sao chép
@@ -445,13 +511,18 @@ export function WalletClient() {
               </div>
 
               <div className="rounded-lg bg-muted p-2.5 text-[11px] text-muted-foreground text-center">
-                Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> và chuyển khoản trước khi hết thời gian <strong>5 phút</strong>. Hệ thống tự động kiểm tra và cộng tiền sau 5 - 15 giây.
+                Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong>{" "}
+                và chuyển khoản trước khi hết thời gian <strong>5 phút</strong>.
+                Hệ thống tự động kiểm tra và cộng tiền sau 5 - 15 giây.
               </div>
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground space-y-2">
               <QrCode className="mx-auto h-12 w-12 stroke-[1.5] text-muted-foreground/50" />
-              <p className="text-xs">Chọn số tiền và bấm &quot;Tạo mã QR Chuyển Khoản&quot; để nạp tiền</p>
+              <p className="text-xs">
+                Chọn số tiền và bấm &quot;Tạo mã QR Chuyển Khoản&quot; để nạp
+                tiền
+              </p>
             </div>
           )}
         </div>
@@ -461,15 +532,24 @@ export function WalletClient() {
       <div className="rounded-2xl border bg-card p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b pb-3">
           <h3 className="font-bold text-base">Lịch sử biến động số dư</h3>
-          <Button size="sm" variant="outline" onClick={fetchTransactions} className="h-7 text-xs gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={fetchTransactions}
+            className="h-7 text-xs gap-1"
+          >
             <RefreshCw className="h-3 w-3" /> Làm mới
           </Button>
         </div>
 
         {loadingTxns ? (
-          <div className="py-8 text-center text-xs text-muted-foreground">Đang tải lịch sử...</div>
+          <div className="py-8 text-center text-xs text-muted-foreground">
+            Đang tải lịch sử...
+          </div>
         ) : transactions.length === 0 ? (
-          <div className="py-8 text-center text-xs text-muted-foreground">Chưa có giao dịch nào trong ví của bạn.</div>
+          <div className="py-8 text-center text-xs text-muted-foreground">
+            Chưa có giao dịch nào trong ví của bạn.
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
@@ -484,7 +564,9 @@ export function WalletClient() {
               </thead>
               <tbody className="divide-y">
                 {transactions.map((t) => {
-                  const isPlus = t.transactionType === "DEPOSIT" || t.transactionType === "REFUND";
+                  const isPlus =
+                    t.transactionType === "DEPOSIT" ||
+                    t.transactionType === "REFUND";
                   return (
                     <tr key={t.id} className="hover:bg-muted/40">
                       <td className="py-3 px-3 text-muted-foreground whitespace-nowrap">
@@ -495,8 +577,11 @@ export function WalletClient() {
                           {t.transactionType}
                         </Badge>
                       </td>
-                      <td className={`py-3 px-3 font-bold whitespace-nowrap ${isPlus ? "text-emerald-600" : "text-foreground"}`}>
-                        {isPlus ? "+" : "-"}{Number(t.amount).toLocaleString("vi-VN")}đ
+                      <td
+                        className={`py-3 px-3 font-bold whitespace-nowrap ${isPlus ? "text-emerald-600" : "text-foreground"}`}
+                      >
+                        {isPlus ? "+" : "-"}
+                        {Number(t.amount).toLocaleString("vi-VN")}đ
                       </td>
                       <td className="py-3 px-3 font-mono">
                         {Number(t.balanceAfter).toLocaleString("vi-VN")}đ
@@ -515,4 +600,3 @@ export function WalletClient() {
     </div>
   );
 }
-

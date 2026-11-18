@@ -103,7 +103,9 @@ export default function AdminDepositsPage() {
           setSummary(json.data?.summary || {});
           setTotalPages(json.data?.pagination?.totalPages || 1);
         } else {
-          toast.error(json.error?.message || "Không thể tải danh sách nạp tiền");
+          toast.error(
+            json.error?.message || "Không thể tải danh sách nạp tiền",
+          );
         }
       } catch {
         toast.error("Lỗi khi tải danh sách giao dịch");
@@ -114,7 +116,7 @@ export default function AdminDepositsPage() {
         setIsRefreshing(false);
       }
     },
-    []
+    [],
   );
 
   // Initial load
@@ -161,19 +163,26 @@ export default function AdminDepositsPage() {
 
     setIsVerifying(true);
     try {
-      const res = await fetch(`/api/admin/deposits/${verifyingDeposit.id}/manual-verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          receivedAmount: amountNum,
-          note: verifyNoteInput.trim() || undefined,
-        }),
-      });
+      const res = await fetch(
+        `/api/admin/deposits/${verifyingDeposit.id}/manual-verify`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            receivedAmount: amountNum,
+            note: verifyNoteInput.trim() || undefined,
+          }),
+        },
+      );
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message || "Duyệt nạp tiền thất bại");
+      if (!res.ok)
+        throw new Error(json.error?.message || "Duyệt nạp tiền thất bại");
 
-      toast.success(json.data?.message || "Duyệt nạp tiền thành công, đã cộng tiền vào ví khách!");
+      toast.success(
+        json.data?.message ||
+          "Duyệt nạp tiền thành công, đã cộng tiền vào ví khách!",
+      );
       setVerifyingDeposit(null);
       setReceivedAmountInput("");
       setVerifyNoteInput("");
@@ -191,18 +200,24 @@ export default function AdminDepositsPage() {
 
     setIsCancelling(true);
     try {
-      const res = await fetch(`/api/admin/deposits/${cancellingDeposit.id}/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reason: cancelReasonInput.trim() || undefined,
-        }),
-      });
+      const res = await fetch(
+        `/api/admin/deposits/${cancellingDeposit.id}/cancel`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: cancelReasonInput.trim() || undefined,
+          }),
+        },
+      );
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message || "Hủy giao dịch thất bại");
+      if (!res.ok)
+        throw new Error(json.error?.message || "Hủy giao dịch thất bại");
 
-      toast.success(json.data?.message || "Đã hủy giao dịch nạp tiền thành công!");
+      toast.success(
+        json.data?.message || "Đã hủy giao dịch nạp tiền thành công!",
+      );
       setCancellingDeposit(null);
       setCancelReasonInput("");
       fetchDeposits({ silent: true });
@@ -221,13 +236,18 @@ export default function AdminDepositsPage() {
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-black">Quản Lý Giao Dịch Nạp Tiền</h1>
             {isRefreshing && (
-              <Badge variant="outline" className="text-[10px] text-primary border-primary/30 bg-primary/5 animate-pulse gap-1 py-0.5 px-2">
-                <RefreshCw className="h-3 w-3 animate-spin" /> Đang cập nhật live...
+              <Badge
+                variant="outline"
+                className="text-[10px] text-primary border-primary/30 bg-primary/5 animate-pulse gap-1 py-0.5 px-2"
+              >
+                <RefreshCw className="h-3 w-3 animate-spin" /> Đang cập nhật
+                live...
               </Badge>
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Theo dõi tất cả giao dịch nạp tiền qua VietQR / SePay, tra cứu và duyệt nạp thủ công khi cần thiết.
+            Theo dõi tất cả giao dịch nạp tiền qua SePay, tra cứu và duyệt nạp
+            thủ công khi cần thiết.
           </p>
         </div>
 
@@ -238,7 +258,9 @@ export default function AdminDepositsPage() {
           disabled={loading || isRefreshing}
           className="h-8 text-xs font-semibold gap-1.5 cursor-pointer"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading || isRefreshing ? "animate-spin" : ""}`} />
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading || isRefreshing ? "animate-spin" : ""}`}
+          />
           Làm mới
         </Button>
       </div>
@@ -247,9 +269,12 @@ export default function AdminDepositsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-2xl border bg-card p-4 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-muted-foreground block">Tổng nạp thành công</span>
+            <span className="text-xs text-muted-foreground block">
+              Tổng nạp thành công
+            </span>
             <span className="text-2xl font-black text-emerald-600">
-              {Number(summary.totalVerifiedAmount || 0).toLocaleString("vi-VN")}đ
+              {Number(summary.totalVerifiedAmount || 0).toLocaleString("vi-VN")}
+              đ
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
               {summary.totalVerifiedCount || 0} giao dịch
@@ -262,9 +287,12 @@ export default function AdminDepositsPage() {
 
         <div className="rounded-2xl border bg-card p-4 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-muted-foreground block">Nạp thành công hôm nay</span>
+            <span className="text-xs text-muted-foreground block">
+              Nạp thành công hôm nay
+            </span>
             <span className="text-2xl font-black text-primary">
-              {Number(summary.todayVerifiedAmount || 0).toLocaleString("vi-VN")}đ
+              {Number(summary.todayVerifiedAmount || 0).toLocaleString("vi-VN")}
+              đ
             </span>
             <span className="text-[10px] text-muted-foreground mt-0.5 block">
               {summary.todayVerifiedCount || 0} giao dịch hôm nay
@@ -277,7 +305,9 @@ export default function AdminDepositsPage() {
 
         <div className="rounded-2xl border bg-card p-4 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-muted-foreground block">Giao dịch đang chờ</span>
+            <span className="text-xs text-muted-foreground block">
+              Giao dịch đang chờ
+            </span>
             <span className="text-2xl font-black text-amber-600">
               {summary.pendingCount || 0}
             </span>
@@ -292,10 +322,10 @@ export default function AdminDepositsPage() {
 
         <div className="rounded-2xl border bg-card p-4 shadow-sm flex items-center justify-between">
           <div>
-            <span className="text-xs text-muted-foreground block">Cổng thanh toán chính</span>
-            <span className="text-xl font-black text-foreground">
-              VietQR / SePay
+            <span className="text-xs text-muted-foreground block">
+              Cổng thanh toán chính
             </span>
+            <span className="text-xl font-black text-foreground">SePay</span>
             <span className="text-[10px] text-emerald-600 font-semibold mt-0.5 block">
               Tự động cộng ví 24/7
             </span>
@@ -351,12 +381,12 @@ export default function AdminDepositsPage() {
               {st === "ALL"
                 ? "Tất cả"
                 : st === "VERIFIED"
-                ? "Thành công"
-                : st === "PENDING"
-                ? "Đang chờ"
-                : st === "CANCELLED"
-                ? "Đã hủy"
-                : "Hết hạn"}
+                  ? "Thành công"
+                  : st === "PENDING"
+                    ? "Đang chờ"
+                    : st === "CANCELLED"
+                      ? "Đã hủy"
+                      : "Hết hạn"}
             </button>
           ))}
         </div>
@@ -390,7 +420,10 @@ export default function AdminDepositsPage() {
               </thead>
               <tbody className="divide-y">
                 {deposits.map((d) => (
-                  <tr key={d.id} className="hover:bg-muted/30 transition-colors">
+                  <tr
+                    key={d.id}
+                    className="hover:bg-muted/30 transition-colors"
+                  >
                     <td className="py-3 px-4 font-mono font-bold text-foreground">
                       <div className="flex items-center gap-1">
                         <span>{d.paymentCode}</span>
@@ -405,8 +438,12 @@ export default function AdminDepositsPage() {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-foreground">{d.customerEmail}</div>
-                      <div className="text-[10px] text-muted-foreground">{d.customerName}</div>
+                      <div className="font-semibold text-foreground">
+                        {d.customerEmail}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {d.customerName}
+                      </div>
                     </td>
                     <td className="py-3 px-4 font-bold text-foreground">
                       {Number(d.amount).toLocaleString("vi-VN")}đ
@@ -433,24 +470,24 @@ export default function AdminDepositsPage() {
                           d.status === "VERIFIED"
                             ? "default"
                             : d.status === "PENDING"
-                            ? "secondary"
-                            : "outline"
+                              ? "secondary"
+                              : "outline"
                         }
                         className={`text-[10px] ${
                           d.status === "VERIFIED"
                             ? "bg-emerald-500/15 text-emerald-600 font-bold border-emerald-500/30"
                             : d.status === "PENDING"
-                            ? "bg-amber-500/15 text-amber-600 font-bold border-amber-500/30"
-                            : ""
+                              ? "bg-amber-500/15 text-amber-600 font-bold border-amber-500/30"
+                              : ""
                         }`}
                       >
                         {d.status === "VERIFIED"
                           ? "Thành công"
                           : d.status === "PENDING"
-                          ? "Đang chờ"
-                          : d.status === "CANCELLED"
-                          ? "Đã hủy"
-                          : d.status}
+                            ? "Đang chờ"
+                            : d.status === "CANCELLED"
+                              ? "Đã hủy"
+                              : d.status}
                       </Badge>
                     </td>
                     <td className="py-3 px-4 text-right">
@@ -553,14 +590,19 @@ export default function AdminDepositsPage() {
               <DialogTitle className="text-base font-bold flex items-center justify-between">
                 <span>Chi tiết nạp tiền: {selectedDeposit.paymentCode}</span>
                 <Badge
-                  variant={selectedDeposit.status === "VERIFIED" ? "default" : "outline"}
+                  variant={
+                    selectedDeposit.status === "VERIFIED"
+                      ? "default"
+                      : "outline"
+                  }
                   className="text-xs"
                 >
                   {selectedDeposit.status}
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Xem chi tiết thông tin thanh toán, thời gian nhận tiền và dữ liệu cổng giao dịch.
+                Xem chi tiết thông tin thanh toán, thời gian nhận tiền và dữ
+                liệu cổng giao dịch.
               </DialogDescription>
             </DialogHeader>
 
@@ -568,22 +610,34 @@ export default function AdminDepositsPage() {
               <div className="rounded-xl border bg-muted/40 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Khách hàng:</span>
-                  <strong className="text-foreground">{selectedDeposit.customerEmail}</strong>
+                  <strong className="text-foreground">
+                    {selectedDeposit.customerEmail}
+                  </strong>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Họ tên:</span>
                   <span>{selectedDeposit.customerName}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Mã nội dung nạp:</span>
-                  <span className="font-mono font-bold text-primary">{selectedDeposit.paymentCode}</span>
+                  <span className="text-muted-foreground">
+                    Mã nội dung nạp:
+                  </span>
+                  <span className="font-mono font-bold text-primary">
+                    {selectedDeposit.paymentCode}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Số tiền yêu cầu:</span>
-                  <span className="font-bold">{Number(selectedDeposit.amount).toLocaleString("vi-VN")}đ</span>
+                  <span className="text-muted-foreground">
+                    Số tiền yêu cầu:
+                  </span>
+                  <span className="font-bold">
+                    {Number(selectedDeposit.amount).toLocaleString("vi-VN")}đ
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Số tiền thực nhận:</span>
+                  <span className="text-muted-foreground">
+                    Số tiền thực nhận:
+                  </span>
                   <span className="font-black text-emerald-600 text-sm">
                     {selectedDeposit.receivedAmount
                       ? `${Number(selectedDeposit.receivedAmount).toLocaleString("vi-VN")}đ`
@@ -594,19 +648,33 @@ export default function AdminDepositsPage() {
 
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <div className="rounded-xl border p-2.5 space-y-1">
-                  <span className="text-muted-foreground block text-[10px]">Cổng thanh toán</span>
-                  <span className="font-bold block">{selectedDeposit.gateway} ({selectedDeposit.paymentMethod})</span>
+                  <span className="text-muted-foreground block text-[10px]">
+                    Cổng thanh toán
+                  </span>
+                  <span className="font-bold block">
+                    {selectedDeposit.gateway} ({selectedDeposit.paymentMethod})
+                  </span>
                   <span className="text-muted-foreground block font-mono text-[10px] truncate">
                     Mã GD: {selectedDeposit.gatewayTxnId || "Chưa có"}
                   </span>
                 </div>
 
                 <div className="rounded-xl border p-2.5 space-y-1">
-                  <span className="text-muted-foreground block text-[10px]">Thời gian</span>
-                  <span className="text-muted-foreground block text-[10px]">Tạo: {new Date(selectedDeposit.createdAt).toLocaleString("vi-VN")}</span>
+                  <span className="text-muted-foreground block text-[10px]">
+                    Thời gian
+                  </span>
+                  <span className="text-muted-foreground block text-[10px]">
+                    Tạo:{" "}
+                    {new Date(selectedDeposit.createdAt).toLocaleString(
+                      "vi-VN",
+                    )}
+                  </span>
                   {selectedDeposit.verifiedAt && (
                     <span className="text-emerald-600 font-semibold block text-[10px]">
-                      Duyệt: {new Date(selectedDeposit.verifiedAt).toLocaleString("vi-VN")}
+                      Duyệt:{" "}
+                      {new Date(selectedDeposit.verifiedAt).toLocaleString(
+                        "vi-VN",
+                      )}
                     </span>
                   )}
                 </div>
@@ -625,7 +693,12 @@ export default function AdminDepositsPage() {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setSelectedDeposit(null)} className="text-xs">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedDeposit(null)}
+                className="text-xs"
+              >
                 Đóng
               </Button>
             </DialogFooter>
@@ -643,15 +716,32 @@ export default function AdminDepositsPage() {
                 Duyệt Nạp Tiền Thủ Công: {verifyingDeposit.paymentCode}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Sử dụng khi khách hàng đã chuyển tiền vào tài khoản ngân hàng nhưng hệ thống chưa tự động cộng ví (do lỗi mạng hoặc khách ghi sai nội dung).
+                Sử dụng khi khách hàng đã chuyển tiền vào tài khoản ngân hàng
+                nhưng hệ thống chưa tự động cộng ví (do lỗi mạng hoặc khách ghi
+                sai nội dung).
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleManualVerify} className="space-y-3.5 py-2 text-xs">
+            <form
+              onSubmit={handleManualVerify}
+              className="space-y-3.5 py-2 text-xs"
+            >
               <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 space-y-1">
-                <div>Khách hàng: <strong>{verifyingDeposit.customerEmail}</strong></div>
-                <div>Mã nội dung: <strong className="font-mono">{verifyingDeposit.paymentCode}</strong></div>
-                <div>Số tiền yêu cầu: <strong className="text-primary">{Number(verifyingDeposit.amount).toLocaleString("vi-VN")}đ</strong></div>
+                <div>
+                  Khách hàng: <strong>{verifyingDeposit.customerEmail}</strong>
+                </div>
+                <div>
+                  Mã nội dung:{" "}
+                  <strong className="font-mono">
+                    {verifyingDeposit.paymentCode}
+                  </strong>
+                </div>
+                <div>
+                  Số tiền yêu cầu:{" "}
+                  <strong className="text-primary">
+                    {Number(verifyingDeposit.amount).toLocaleString("vi-VN")}đ
+                  </strong>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -671,7 +761,9 @@ export default function AdminDepositsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-muted-foreground">Ghi chú đối soát (Tùy chọn):</label>
+                <label className="font-semibold text-muted-foreground">
+                  Ghi chú đối soát (Tùy chọn):
+                </label>
                 <Input
                   value={verifyNoteInput}
                   onChange={(e) => setVerifyNoteInput(e.target.value)}
@@ -697,7 +789,9 @@ export default function AdminDepositsPage() {
                   size="sm"
                   className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
                 >
-                  {isVerifying && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                  {isVerifying && (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  )}
                   Xác nhận Duyệt & Cộng Tiền Ví
                 </Button>
               </DialogFooter>
@@ -716,18 +810,31 @@ export default function AdminDepositsPage() {
                 Hủy Yêu Cầu Nạp Tiền: {cancellingDeposit.paymentCode}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Hủy giao dịch nạp tiền đang chờ (PENDING) khi khách hàng không chuyển khoản hoặc giao dịch đã quá hạn.
+                Hủy giao dịch nạp tiền đang chờ (PENDING) khi khách hàng không
+                chuyển khoản hoặc giao dịch đã quá hạn.
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleCancelDeposit} className="space-y-3.5 py-2 text-xs">
+            <form
+              onSubmit={handleCancelDeposit}
+              className="space-y-3.5 py-2 text-xs"
+            >
               <div className="rounded-xl bg-muted/40 border p-3 space-y-1">
-                <div>Khách hàng: <strong>{cancellingDeposit.customerEmail}</strong></div>
-                <div>Số tiền: <strong>{Number(cancellingDeposit.amount).toLocaleString("vi-VN")}đ</strong></div>
+                <div>
+                  Khách hàng: <strong>{cancellingDeposit.customerEmail}</strong>
+                </div>
+                <div>
+                  Số tiền:{" "}
+                  <strong>
+                    {Number(cancellingDeposit.amount).toLocaleString("vi-VN")}đ
+                  </strong>
+                </div>
               </div>
 
               <div className="space-y-1">
-                <label className="font-semibold text-muted-foreground">Lý do hủy (Tùy chọn):</label>
+                <label className="font-semibold text-muted-foreground">
+                  Lý do hủy (Tùy chọn):
+                </label>
                 <Input
                   value={cancelReasonInput}
                   onChange={(e) => setCancelReasonInput(e.target.value)}
@@ -753,7 +860,9 @@ export default function AdminDepositsPage() {
                   size="sm"
                   className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
                 >
-                  {isCancelling && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                  {isCancelling && (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  )}
                   Xác nhận Hủy giao dịch
                 </Button>
               </DialogFooter>

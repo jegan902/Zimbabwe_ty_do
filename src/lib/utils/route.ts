@@ -4,6 +4,9 @@ import logger from "./logger";
 import { AppError, InternalServerError } from "./errors";
 import { errorResponse } from "./response";
 import { assertBodySize, bodyLimitForPath } from "./body";
+import { assertTrustedOrigin } from "@/lib/security/csrf";
+import { recordAdminMutation } from "@/lib/services/audit.service";
+import { recordSecurityDenial } from "@/lib/services/security-alert.service";
 import { Prisma } from "@prisma/client";
 
 type RouteHandler = (
@@ -14,16 +17,23 @@ type RouteHandler = (
 /**
  * Wraps a route handler so every failure returns the same JSON error shape.
  * Unexpected errors are logged server-side and returned as a generic 500 without details.
- * Oversized bodies are rejected before the handler can buffer them.
+ *
+ * Every wrapped mutation also gets the cross-site origin gate, the body-size ceiling,
+ * an audit row (admin routes) and denial-spike accounting (401/403/429).
  */
 export function apiRoute(
   handler: (request: NextRequest) => Promise<NextResponse>,
 ): RouteHandler {
   return async (request: NextRequest) => {
     try {
+      assertTrustedOrigin(request);
       assertBodySize(request, bodyLimitForPath(request.nextUrl.pathname));
-      return await handler(request);
+
+      const response = await handler(request);
+      await recordAdminMutation(request, response.status);
+      return response;
     } catch (error) {
+      trackDenial(request, error);
       return toErrorResponse(error);
     }
   };
@@ -44,12 +54,28 @@ export function apiRouteWithParams<TParams extends Record<string, string>>(
     context: { params: Promise<TParams> },
   ) => {
     try {
+      assertTrustedOrigin(request);
       assertBodySize(request, bodyLimitForPath(request.nextUrl.pathname));
-      return await handler(request, context);
+
+      const response = await handler(request, context);
+      await recordAdminMutation(request, response.status);
+      return response;
     } catch (error) {
+      trackDenial(request, error);
       return toErrorResponse(error);
     }
   };
+}
+
+/**
+ * Feeds the denial counter behind the security alerts. Fire-and-forget: an alert
+ * must never delay or fail the response the caller is waiting for.
+ */
+function trackDenial(request: NextRequest, error: unknown): void {
+  if (!(error instanceof AppError)) return;
+  const { statusCode, code } = error;
+  if (statusCode !== 401 && statusCode !== 403 && statusCode !== 429) return;
+  void recordSecurityDenial(request, statusCode, code);
 }
 
 function toErrorResponse(error: unknown): NextResponse {

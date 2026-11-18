@@ -3,6 +3,9 @@ import { cacheGet, cacheSet, CACHE_KEYS } from "@/lib/cache/cache";
 import { NotFoundError } from "@/lib/utils/errors";
 import { Prisma } from "@prisma/client";
 
+/** Deepest catalog page a client may request (12 products/page → 60k rows). */
+export const MAX_CATALOG_PAGE = 5000;
+
 export interface ProductListParams {
   page?: number;
   limit?: number;
@@ -90,7 +93,13 @@ async function getSoldCounts(productIds: string[]): Promise<Map<string, number>>
 }
 
 export async function getProducts(params: ProductListParams = {}) {
-  const page = Math.max(1, params.page || 1);
+  // A caller-supplied page becomes an OFFSET; without a ceiling `?page=99999999`
+  // is a cheap way to make Postgres scan the whole table.
+  const requestedPage = Math.trunc(params.page || 1);
+  const page = Math.min(
+    MAX_CATALOG_PAGE,
+    Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1,
+  );
   const limit = Math.min(100, Math.max(1, params.limit || 12));
   const skip = (page - 1) * limit;
 

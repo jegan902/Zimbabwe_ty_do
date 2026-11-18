@@ -14,6 +14,8 @@ import {
   LogOut,
   Users,
   CreditCard,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +34,7 @@ const NAV_ITEMS = [
   { href: "/admin/products", label: "Quản lý sản phẩm", icon: Package },
   { href: "/admin/suppliers", label: "Nhà cung cấp & Vốn", icon: Truck },
   { href: "/admin/sync", label: "Trung tâm đồng bộ", icon: RefreshCw },
+  { href: "/admin/security", label: "Bảo mật tài khoản", icon: ShieldCheck },
 ];
 
 /**
@@ -41,13 +44,18 @@ const NAV_ITEMS = [
  */
 export function AdminShell({
   user,
+  twoFactorEnabled,
+  twoFactorRequired,
   children,
 }: {
   user: AdminShellUser;
+  twoFactorEnabled: boolean;
+  twoFactorRequired: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const { loading, logout } = useAuth();
+  const needsEnrollment = twoFactorRequired && !twoFactorEnabled;
 
   return (
     <div className="flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
@@ -135,6 +143,21 @@ export function AdminShell({
 
       {/* Main Content Area */}
       <main className="flex-1 p-6 md:p-8 bg-muted/20 overflow-y-auto">
+        {needsEnrollment && pathname !== "/admin/security" && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+            <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p className="font-bold">Tài khoản quản trị chưa bật xác thực hai lớp (2FA)</p>
+              <p>
+                Mọi thao tác quản trị đang bị chặn để bảo vệ shop. Hãy bật 2FA bằng ứng dụng
+                Google Authenticator / Authy — chỉ mất khoảng 1 phút.{" "}
+                <Link href="/admin/security" className="font-bold underline">
+                  Bật ngay
+                </Link>
+              </p>
+            </div>
+          </div>
+        )}
         {children}
       </main>
     </div>

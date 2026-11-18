@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { isAdminTwoFactorRequired } from "@/lib/auth/two-factor";
 import { isAdmin } from "@/lib/types/auth";
 import { AdminShell } from "./admin-shell";
 
@@ -30,6 +31,8 @@ export default async function AdminLayout({
   return (
     <AdminShell
       user={{ fullName: user.fullName, email: user.email, role: user.role }}
+      twoFactorEnabled={Boolean(user.twoFactorEnabled)}
+      twoFactorRequired={isAdminTwoFactorRequired()}
     >
       {children}
     </AdminShell>

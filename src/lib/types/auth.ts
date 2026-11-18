@@ -10,6 +10,8 @@ export interface AuthUser {
   username?: string;
   phone?: string | null;
   avatar?: string | null;
+  /** True once the owner has confirmed a TOTP code at least once. */
+  twoFactorEnabled?: boolean;
 }
 
 export function isAdmin(user: AuthUser | null | undefined): boolean {

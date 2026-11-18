@@ -81,6 +81,7 @@ function toAuthUser(user: {
   role: UserRole;
   status: string;
   fullName: string | null;
+  twoFactorEnabledAt?: Date | null;
   username?: string;
   avatar?: string | null;
 }): AuthUser {
@@ -92,6 +93,7 @@ function toAuthUser(user: {
     status: user.status as AuthUser["status"],
     fullName: user.fullName,
     avatar: null,
+    twoFactorEnabled: Boolean(user.twoFactorEnabledAt),
   };
 }
 
@@ -116,6 +118,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
           role: true,
           status: true,
           fullName: true,
+          twoFactorEnabledAt: true,
         },
       },
     },
@@ -157,6 +160,7 @@ export async function getUserFromRequest(request: NextRequest): Promise<AuthUser
           role: true,
           status: true,
           fullName: true,
+          twoFactorEnabledAt: true,
         },
       },
     },

@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Giá trị CI-only, KHÔNG phải secret thật: mọi job đều dùng DB/Redis tạm.
+  DATABASE_URL: postgresql://marketplace:marketplace@localhost:5432/marketplace?schema=public
+  REDIS_URL: redis://localhost:6379
+  SESSION_SECRET: ci-session-secret-0123456789abcdef0123456789abcdef
+  ENCRYPTION_KEY: 1f8b9c2d3e4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  # Không chạy worker đồng bộ trong CI (tránh gọi mạng ra nhà cung cấp).
+  SYNC_WORKER_ENABLED: "false"
+  CHECKPOINT_DISABLE: "1"
+
+jobs:
+  verify:
+    name: Type-check, test, lint, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: marketplace
+          POSTGRES_PASSWORD: marketplace
+          POSTGRES_DB: marketplace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U marketplace"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      # postinstall chạy `prisma generate`, nên client luôn khớp schema.
+      - name: Install dependencies
+        run: npm ci
+
+      # Chạy migration trên DB rỗng: đảm bảo prisma/migrations áp dụng được
+      # từ đầu (bao gồm cả migration viết tay cho apiKeyHash/apiKeyEnc).
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  audit:
+    name: Dependency audit (production tree)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # Chỉ chặn ở mức high/critical trong cây chạy production.
+      # Công cụ dev (vitest, shadcn, eslint...) không làm tăng bề mặt tấn công.
+      - name: npm audit
+        run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Dùng image CLI thay cho gitleaks-action để không cần license.
+      - name: gitleaks detect
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source=/repo --redact --no-banner --exit-code 1

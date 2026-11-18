@@ -6,7 +6,9 @@ import {
   ensureSupplierSyncSettings,
   scheduleNextSync,
 } from "@/lib/jobs/sync-settings";
+import { recordSyncWorkerHeartbeat } from "@/lib/jobs/worker-heartbeat";
 import { runSupplierBalanceAlertsThrottled } from "@/lib/services/notification.service";
+import { runSupplierSyncHealthAlertsThrottled } from "@/lib/services/supplier-health.service";
 
 export {
   SYNC_INTERVAL_OPTIONS,
@@ -25,6 +27,8 @@ export async function runDueSupplierSyncs(): Promise<{
   skipped: number;
   failed: number;
 }> {
+  // Proves this process is still ticking, for `GET /api/health`.
+  await recordSyncWorkerHeartbeat();
   await ensureSupplierSyncSettings();
 
   const now = new Date();
@@ -93,14 +97,23 @@ export async function runDueSupplierSyncs(): Promise<{
   // Balance alerts run on their own 5-minute throttle and never surface an error,
   // so a mail problem cannot make the catalog sync report a failure.
   await runSupplierBalanceAlertsThrottled();
+  // Same throttle pattern: warns when a supplier keeps failing or silently
+  // stopped refreshing, which no balance check can detect.
+  await runSupplierSyncHealthAlertsThrottled();
 
   return { checked: due.length, ran, skipped, failed };
 }
 
-let inProcessTimer: NodeJS.Timeout | null = null;
+// Dev reloads (and Next's separate module graphs for instrumentation vs. route
+// handlers) can evaluate this module more than once. Keeping the timer on
+// globalThis — same trick as the Prisma/Redis clients — stops a second timer from
+// being started for the same process.
+const globalForSync = globalThis as unknown as {
+  supplierSyncTimer?: NodeJS.Timeout;
+};
 
 export function initInProcessSyncWorker(intervalMs = 30_000) {
-  if (inProcessTimer) return;
+  if (globalForSync.supplierSyncTimer) return;
   logger.info("[AutoSync] In-process supplier sync worker started");
 
   // Initial check after 3 seconds
@@ -110,7 +123,7 @@ export function initInProcessSyncWorker(intervalMs = 30_000) {
     );
   }, 3_000);
 
-  inProcessTimer = setInterval(async () => {
+  globalForSync.supplierSyncTimer = setInterval(async () => {
     try {
       const summary = await runDueSupplierSyncs();
       if (summary.ran > 0) {

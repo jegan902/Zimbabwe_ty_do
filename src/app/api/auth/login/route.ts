@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { createSession } from "@/lib/auth/session";
+import { recordFailedAttempt, resetFailedAttempts } from "@/lib/auth/attempts";
+import { signLoginChallenge } from "@/lib/auth/tokens";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { verifyPassword } from "@/lib/utils/crypto";
 import { prisma } from "@/lib/utils/db";
@@ -49,32 +51,36 @@ export const POST = apiRoute(async (request: NextRequest) => {
   );
 
   if (!isValidPassword) {
-    const nextFailedCount = user.failedLoginCount + 1;
-    const lock = nextFailedCount >= 5;
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        failedLoginCount: nextFailedCount,
-        lockedUntil: lock ? new Date(Date.now() + 15 * 60 * 1000) : undefined,
-        status: lock ? "LOCKED" : undefined,
-      },
+    await recordFailedAttempt({
+      userId: user.id,
+      email: user.email,
+      currentCount: user.failedLoginCount,
+      ipAddress: ip,
+      userAgent: request.headers.get("user-agent"),
     });
 
     throw new AuthenticationError("Email hoặc mật khẩu không chính xác");
   }
 
+  const userAgent = request.headers.get("user-agent");
+
+  // Password step passed: the attempt counter is reset, but no session is issued
+  // while a second factor is configured — see /api/auth/2fa/login.
+  await resetFailedAttempts(user.id);
+
+  if (user.twoFactorEnabledAt) {
+    return successResponse({
+      twoFactorRequired: true,
+      challenge: signLoginChallenge(user.id),
+    });
+  }
+
   // Reset failed login count
   await prisma.user.update({
     where: { id: user.id },
-    data: {
-      failedLoginCount: 0,
-      lockedUntil: null,
-      lastLoginAt: new Date(),
-    },
+    data: { lastLoginAt: new Date() },
   });
 
-  const userAgent = request.headers.get("user-agent");
   await createSession(user.id, { ipAddress: ip, userAgent });
 
   await prisma.auditLog.create({

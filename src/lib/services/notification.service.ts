@@ -9,7 +9,10 @@ export interface SendAlertParams {
   type:
     | "SUPPLIER_LOW_BALANCE"
     | "SUPPLIER_CONNECTION_LOST"
-    | "ORDER_RECONCILIATION";
+    | "SUPPLIER_SYNC_FAILURE"
+    | "ORDER_RECONCILIATION"
+    | "SECURITY_LOCKOUT"
+    | "SECURITY_DENIAL_SPIKE";
   subject: string;
   body: string;
   dedupeKey?: string;

@@ -46,6 +46,13 @@ model User {
   apiKeyEnc        String?
   ipWhitelist      String?
 
+  /// AES-256-GCM ciphertext of the base32 TOTP secret (RFC 6238).
+  twoFactorSecretEnc     String?
+  /// Set only after the owner confirmed a code once; drives the login challenge.
+  twoFactorEnabledAt     DateTime?
+  /// JSON array of SHA-256 hashes of single-use recovery codes.
+  twoFactorRecoveryCodes String?
+
   wallet             Wallet?
   orders             Order[]
   sessions           Session[]

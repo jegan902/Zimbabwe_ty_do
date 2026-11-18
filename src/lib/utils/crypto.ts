@@ -4,8 +4,8 @@ import * as argon2 from 'argon2';
 const ALGORITHM = 'aes-256-gcm';
 
 // Resolved on first use so that importing this module never crashes a build.
-// Fails closed: without a valid key, nothing is encrypted or decrypted with a
-// random key that would be lost on restart.
+// Fails closed: a missing or malformed key throws instead of encrypting with a
+// random (and therefore unrecoverable) key or with a key baked into the source.
 let cachedKey: Buffer | null = null;
 
 function getEncryptionKey(): Buffer {
@@ -17,7 +17,29 @@ function getEncryptionKey(): Buffer {
     return cachedKey;
   }
 
-  const secret = process.env.SESSION_SECRET || 'marketplace_default_development_secret_key_fixed_32';
+  if (hex) {
+    throw new Error('ENCRYPTION_KEY must be exactly 64 hex characters (openssl rand -hex 32)');
+  }
+
+  // No hardcoded default: a key that ships in the source is public knowledge and
+  // would make every stored credential readable to anyone with a database dump.
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      'Missing ENCRYPTION_KEY (64 hex chars) and SESSION_SECRET (>= 32 chars); refusing to encrypt with a weak key'
+    );
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    // Existing supplier credentials were encrypted with this derived key, so throwing
+    // here would take the integration down. The startup check in instrumentation.ts
+    // reports the misconfiguration; rotating SESSION_SECRET must be preceded by
+    // setting ENCRYPTION_KEY and re-saving the stored credentials.
+    console.error(
+      '[crypto] ENCRYPTION_KEY is not set: falling back to a key derived from SESSION_SECRET. Set ENCRYPTION_KEY before rotating SESSION_SECRET.'
+    );
+  }
+
   cachedKey = crypto.createHash('sha256').update(secret).digest();
   return cachedKey;
 }

@@ -37,7 +37,13 @@ model User {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
+  /// Legacy plaintext partner key. Only read to migrate an existing key to
+  /// `apiKeyHash` + `apiKeyEnc`; scripts/migrate-api-keys.ts clears it.
   apiKey           String?    @unique
+  /// SHA-256 of the partner key. The only column used for authentication lookup.
+  apiKeyHash       String?    @unique
+  /// AES-256-GCM ciphertext of the partner key, so its owner can still reveal it.
+  apiKeyEnc        String?
   ipWhitelist      String?
 
   wallet             Wallet?

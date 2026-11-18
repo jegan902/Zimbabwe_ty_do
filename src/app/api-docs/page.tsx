@@ -49,16 +49,22 @@ export default function ApiDocsPage() {
   const [savingIp, setSavingIp] = useState(false);
   const [ipWhitelistInput, setIpWhitelistInput] = useState("");
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [activeCodeLang, setActiveCodeLang] = useState<"curl" | "php" | "nodejs" | "python">("curl");
+  const [activeCodeLang, setActiveCodeLang] = useState<
+    "curl" | "php" | "nodejs" | "python"
+  >("curl");
 
   // Live test state
-  const [testEndpoint, setTestEndpoint] = useState<"profile" | "products" | "product">("profile");
+  const [testEndpoint, setTestEndpoint] = useState<
+    "profile" | "products" | "product"
+  >("profile");
   const [testProductId, setTestProductId] = useState("");
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
   // Expanded endpoint details
-  const [expandedEndpoint, setExpandedEndpoint] = useState<string | null>("buy");
+  const [expandedEndpoint, setExpandedEndpoint] = useState<string | null>(
+    "buy",
+  );
 
   const [baseUrl, setBaseUrl] = useState("http://localhost:3000");
 
@@ -104,7 +110,11 @@ export default function ApiDocsPage() {
   };
 
   const handleRegenerateKey = async () => {
-    if (!confirm("Bạn có chắc chắn muốn đổi API Key mới? API Key cũ sẽ bị vô hiệu hóa ngay lập tức!")) {
+    if (
+      !confirm(
+        "Bạn có chắc chắn muốn đổi API Key mới? API Key cũ sẽ bị vô hiệu hóa ngay lập tức!",
+      )
+    ) {
       return;
     }
     setRegenerating(true);
@@ -148,7 +158,8 @@ export default function ApiDocsPage() {
     }
   };
 
-  const currentApiKey = apiData.apiKey || "3465d9d08df90e2c340add287da0f006hrbM5nBZRdNw8QHpesJC7XW1iojIvVTk";
+  // Không hardcode key mẫu: khách chưa đăng nhập / chưa có key sẽ thấy placeholder.
+  const currentApiKey = apiData.apiKey || "YOUR_API_KEY";
 
   const getMaskedKey = (key: string) => {
     if (!key) return "Chưa tạo API Key";
@@ -179,7 +190,13 @@ export default function ApiDocsPage() {
         toast.error(data.msg || "API trả về lỗi hoặc thiếu quyền");
       }
     } catch (err: any) {
-      setTestResult(JSON.stringify({ status: "error", msg: err?.message || "Không thể kết nối API" }, null, 2));
+      setTestResult(
+        JSON.stringify(
+          { status: "error", msg: err?.message || "Không thể kết nối API" },
+          null,
+          2,
+        ),
+      );
       toast.error("Lỗi khi gửi yêu cầu");
     } finally {
       setTestLoading(false);
@@ -195,7 +212,12 @@ export default function ApiDocsPage() {
       url: `${baseUrl}/api/profile.php?api_key=${currentApiKey}`,
       shortUrl: "/api/profile.php?api_key=...",
       params: [
-        { name: "api_key", type: "string", required: true, desc: "Khóa API Key của tài khoản" },
+        {
+          name: "api_key",
+          type: "string",
+          required: true,
+          desc: "Khóa API Key của tài khoản",
+        },
       ],
       sampleResponse: {
         status: "success",
@@ -217,7 +239,12 @@ export default function ApiDocsPage() {
       url: `${baseUrl}/api/products.php?api_key=${currentApiKey}`,
       shortUrl: "/api/products.php?api_key=...",
       params: [
-        { name: "api_key", type: "string", required: true, desc: "Khóa API Key của bạn" },
+        {
+          name: "api_key",
+          type: "string",
+          required: true,
+          desc: "Khóa API Key của bạn",
+        },
       ],
       sampleResponse: {
         status: "success",
@@ -251,8 +278,18 @@ export default function ApiDocsPage() {
       url: `${baseUrl}/api/product.php?api_key=${currentApiKey}&id={PRODUCT_ID}`,
       shortUrl: "/api/product.php?api_key=...&id=ID",
       params: [
-        { name: "api_key", type: "string", required: true, desc: "Khóa API Key" },
-        { name: "id", type: "string", required: true, desc: "ID hoặc Slug của sản phẩm cần xem" },
+        {
+          name: "api_key",
+          type: "string",
+          required: true,
+          desc: "Khóa API Key",
+        },
+        {
+          name: "id",
+          type: "string",
+          required: true,
+          desc: "ID hoặc Slug của sản phẩm cần xem",
+        },
       ],
       sampleResponse: {
         status: "success",
@@ -277,8 +314,18 @@ export default function ApiDocsPage() {
       url: `${baseUrl}/api/order.php?api_key=${currentApiKey}&id={ORDER_ID}`,
       shortUrl: "/api/order.php?api_key=...&id=ORDER_ID",
       params: [
-        { name: "api_key", type: "string", required: true, desc: "Khóa API Key" },
-        { name: "id", type: "string", required: true, desc: "Mã đơn hàng (VD: DH123456) hoặc ID đơn" },
+        {
+          name: "api_key",
+          type: "string",
+          required: true,
+          desc: "Khóa API Key",
+        },
+        {
+          name: "id",
+          type: "string",
+          required: true,
+          desc: "Mã đơn hàng (VD: DH123456) hoặc ID đơn",
+        },
       ],
       sampleResponse: {
         status: "success",
@@ -289,9 +336,7 @@ export default function ApiDocsPage() {
           quantity: 1,
           total_amount: 75000,
           status: "SUCCESS",
-          data: [
-            "canva_user@gmail.com|Password123#|2fa_secret",
-          ],
+          data: ["canva_user@gmail.com|Password123#|2fa_secret"],
         },
       },
     },
@@ -304,11 +349,31 @@ export default function ApiDocsPage() {
       shortUrl: "/api/buy_product",
       isForm: true,
       formData: [
-        { field: "action", value: "buyProduct", desc: "Hành động (bắt buộc phải là buyProduct)" },
-        { field: "id", value: "ID sản phẩm cần mua", desc: "ID sản phẩm (lấy từ API danh sách sản phẩm)" },
-        { field: "amount", value: "Số lượng cần mua", desc: "Số lượng mua (mặc định 1)" },
-        { field: "coupon", value: "Mã giảm giá nếu có", desc: "Mã coupon ưu đãi (nếu có)" },
-        { field: "api_key", value: currentApiKey, desc: "Khóa API Key của bạn" },
+        {
+          field: "action",
+          value: "buyProduct",
+          desc: "Hành động (bắt buộc phải là buyProduct)",
+        },
+        {
+          field: "id",
+          value: "ID sản phẩm cần mua",
+          desc: "ID sản phẩm (lấy từ API danh sách sản phẩm)",
+        },
+        {
+          field: "amount",
+          value: "Số lượng cần mua",
+          desc: "Số lượng mua (mặc định 1)",
+        },
+        {
+          field: "coupon",
+          value: "Mã giảm giá nếu có",
+          desc: "Mã coupon ưu đãi (nếu có)",
+        },
+        {
+          field: "api_key",
+          value: currentApiKey,
+          desc: "Khóa API Key của bạn",
+        },
       ],
       sampleResponse: {
         status: "success",
@@ -318,9 +383,7 @@ export default function ApiDocsPage() {
         product_id: "prod_101",
         amount: 1,
         total_price: 75000,
-        data: [
-          "canva_user@gmail.com|Password123#|2fa_secret",
-        ],
+        data: ["canva_user@gmail.com|Password123#|2fa_secret"],
       },
     },
   ];
@@ -339,7 +402,8 @@ export default function ApiDocsPage() {
                 TÀI LIỆU TÍCH HỢP API
               </h1>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Cung cấp chuẩn API kết nối tự động giúp các đối tác và đại lý đồng bộ sản phẩm và mua hàng trực tiếp
+                Cung cấp chuẩn API kết nối tự động giúp các đối tác và đại lý
+                đồng bộ sản phẩm và mua hàng trực tiếp
               </p>
             </div>
           </div>
@@ -351,7 +415,9 @@ export default function ApiDocsPage() {
             <div className="flex items-center gap-3 text-sm">
               <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0" />
               <span>
-                Bạn đang xem tài liệu API mẫu. Hãy <strong>Đăng nhập</strong> hoặc <strong>Đăng ký</strong> để nhận API Key cá nhân và số dư ví riêng của bạn.
+                Bạn đang xem tài liệu API mẫu. Hãy <strong>Đăng nhập</strong>{" "}
+                hoặc <strong>Đăng ký</strong> để nhận API Key cá nhân và số dư
+                ví riêng của bạn.
               </span>
             </div>
             <div className="flex gap-2 shrink-0">
@@ -361,7 +427,11 @@ export default function ApiDocsPage() {
                 </Button>
               </Link>
               <Link href="/register">
-                <Button size="sm" variant="outline" className="font-semibold bg-background">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="font-semibold bg-background"
+                >
                   Đăng ký
                 </Button>
               </Link>
@@ -390,7 +460,11 @@ export default function ApiDocsPage() {
                   title={showKey ? "Ẩn API Key" : "Hiện API Key"}
                   onClick={() => setShowKey(!showKey)}
                 >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showKey ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </Button>
 
                 <Button
@@ -418,7 +492,9 @@ export default function ApiDocsPage() {
                     disabled={regenerating}
                     onClick={handleRegenerateKey}
                   >
-                    <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
+                    <RefreshCw
+                      className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`}
+                    />
                   </Button>
                 )}
               </div>
@@ -463,35 +539,63 @@ export default function ApiDocsPage() {
         <div className="mt-10">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold">Quy trình tích hợp kéo hàng tự động</h2>
+            <h2 className="text-lg font-bold">
+              Quy trình tích hợp kéo hàng tự động
+            </h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-xl border bg-card p-4 shadow-sm relative overflow-hidden">
-              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">01</div>
-              <div className="font-bold text-sm mb-1 text-primary">Nạp tiền vào ví</div>
+              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">
+                01
+              </div>
+              <div className="font-bold text-sm mb-1 text-primary">
+                Nạp tiền vào ví
+              </div>
               <p className="text-xs text-muted-foreground">
-                Đăng ký tài khoản và nạp số dư sẵn vào ví để hệ thống tự động trừ tiền khi mua qua API.
+                Đăng ký tài khoản và nạp số dư sẵn vào ví để hệ thống tự động
+                trừ tiền khi mua qua API.
               </p>
             </div>
             <div className="rounded-xl border bg-card p-4 shadow-sm relative overflow-hidden">
-              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">02</div>
-              <div className="font-bold text-sm mb-1 text-primary">Lấy API Key</div>
+              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">
+                02
+              </div>
+              <div className="font-bold text-sm mb-1 text-primary">
+                Lấy API Key
+              </div>
               <p className="text-xs text-muted-foreground">
-                Copy API Key phía trên và cài đặt IP Whitelist của máy chủ của bạn để bảo mật tuyệt đối.
+                Copy API Key phía trên và cài đặt IP Whitelist của máy chủ của
+                bạn để bảo mật tuyệt đối.
               </p>
             </div>
             <div className="rounded-xl border bg-card p-4 shadow-sm relative overflow-hidden">
-              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">03</div>
-              <div className="font-bold text-sm mb-1 text-primary">Kéo danh sách sản phẩm</div>
+              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">
+                03
+              </div>
+              <div className="font-bold text-sm mb-1 text-primary">
+                Kéo danh sách sản phẩm
+              </div>
               <p className="text-xs text-muted-foreground">
-                Gọi endpoint <code className="text-xs font-mono bg-muted px-1 rounded">/api/products.php</code> để lấy danh mục & giá niêm yết lên web của bạn.
+                Gọi endpoint{" "}
+                <code className="text-xs font-mono bg-muted px-1 rounded">
+                  /api/products.php
+                </code>{" "}
+                để lấy danh mục & giá niêm yết lên web của bạn.
               </p>
             </div>
             <div className="rounded-xl border bg-card p-4 shadow-sm relative overflow-hidden">
-              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">04</div>
-              <div className="font-bold text-sm mb-1 text-primary">Tự động Mua hàng</div>
+              <div className="text-3xl font-black text-primary/20 absolute top-2 right-3">
+                04
+              </div>
+              <div className="font-bold text-sm mb-1 text-primary">
+                Tự động Mua hàng
+              </div>
               <p className="text-xs text-muted-foreground">
-                Khi khách order trên web của bạn, hệ thống bạn gọi <code className="text-xs font-mono bg-muted px-1 rounded">/api/buy_product</code> và nhận tài khoản trả lại ngay lập tức.
+                Khi khách order trên web của bạn, hệ thống bạn gọi{" "}
+                <code className="text-xs font-mono bg-muted px-1 rounded">
+                  /api/buy_product
+                </code>{" "}
+                và nhận tài khoản trả lại ngay lập tức.
               </p>
             </div>
           </div>
@@ -504,21 +608,28 @@ export default function ApiDocsPage() {
               <Server className="h-5 w-5 text-primary" />
               <h2 className="text-lg font-bold">Danh sách các API Endpoints</h2>
             </div>
-            <span className="text-xs text-muted-foreground">Hỗ trợ đầy đủ định dạng GET, POST & Form-data</span>
+            <span className="text-xs text-muted-foreground">
+              Hỗ trợ đầy đủ định dạng GET, POST & Form-data
+            </span>
           </div>
 
           <div className="rounded-2xl border bg-card divide-y shadow-sm">
             {endpoints.map((ep) => {
               const isExpanded = expandedEndpoint === ep.id;
               return (
-                <div key={ep.id} className="p-5 md:p-6 transition-colors hover:bg-muted/10">
+                <div
+                  key={ep.id}
+                  className="p-5 md:p-6 transition-colors hover:bg-muted/10"
+                >
                   {/* Top line: Label + Method badge + URL + Copy Button */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
                     <div className="lg:col-span-3">
                       <div className="font-bold text-sm text-foreground flex items-center gap-2">
                         {ep.title}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{ep.desc}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                        {ep.desc}
+                      </div>
                     </div>
 
                     <div className="lg:col-span-9 flex flex-wrap sm:flex-nowrap items-center gap-2">
@@ -560,9 +671,15 @@ export default function ApiDocsPage() {
                         size="icon"
                         className="h-8 w-8 shrink-0 text-muted-foreground"
                         title="Xem chi tiết"
-                        onClick={() => setExpandedEndpoint(isExpanded ? null : ep.id)}
+                        onClick={() =>
+                          setExpandedEndpoint(isExpanded ? null : ep.id)
+                        }
                       >
-                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -577,9 +694,20 @@ export default function ApiDocsPage() {
                           </div>
                           <div className="rounded-xl border bg-muted/40 p-3 font-mono text-xs space-y-1">
                             {ep.formData.map((f) => (
-                              <div key={f.field} className="flex flex-wrap items-center gap-2">
-                                <span className="font-bold text-foreground">{f.field}:</span>
-                                <span className={f.field === "api_key" ? "text-blue-600 dark:text-blue-400 font-semibold" : "text-muted-foreground"}>
+                              <div
+                                key={f.field}
+                                className="flex flex-wrap items-center gap-2"
+                              >
+                                <span className="font-bold text-foreground">
+                                  {f.field}:
+                                </span>
+                                <span
+                                  className={
+                                    f.field === "api_key"
+                                      ? "text-blue-600 dark:text-blue-400 font-semibold"
+                                      : "text-muted-foreground"
+                                  }
+                                >
                                   {f.value}
                                 </span>
                                 <span className="text-[11px] text-muted-foreground/80 italic ml-2">
@@ -607,16 +735,26 @@ export default function ApiDocsPage() {
                               <tbody className="divide-y">
                                 {ep.params?.map((p) => (
                                   <tr key={p.name}>
-                                    <td className="p-2.5 font-mono font-bold text-primary">{p.name}</td>
-                                    <td className="p-2.5 text-muted-foreground">{p.type}</td>
+                                    <td className="p-2.5 font-mono font-bold text-primary">
+                                      {p.name}
+                                    </td>
+                                    <td className="p-2.5 text-muted-foreground">
+                                      {p.type}
+                                    </td>
                                     <td className="p-2.5">
                                       {p.required ? (
-                                        <span className="text-rose-500 font-semibold">Có</span>
+                                        <span className="text-rose-500 font-semibold">
+                                          Có
+                                        </span>
                                       ) : (
-                                        <span className="text-muted-foreground">Không</span>
+                                        <span className="text-muted-foreground">
+                                          Không
+                                        </span>
                                       )}
                                     </td>
-                                    <td className="p-2.5 text-foreground">{p.desc}</td>
+                                    <td className="p-2.5 text-foreground">
+                                      {p.desc}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -633,14 +771,21 @@ export default function ApiDocsPage() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleCopy(JSON.stringify(ep.sampleResponse, null, 2), `res-${ep.id}`)}
+                            onClick={() =>
+                              handleCopy(
+                                JSON.stringify(ep.sampleResponse, null, 2),
+                                `res-${ep.id}`,
+                              )
+                            }
                             className="text-[11px] text-primary hover:underline flex items-center gap-1 font-semibold"
                           >
                             <Copy className="h-3 w-3" /> Sao chép JSON
                           </button>
                         </div>
                         <div className="relative rounded-xl border bg-slate-950 p-4 font-mono text-xs text-slate-100 overflow-x-auto">
-                          <pre>{JSON.stringify(ep.sampleResponse, null, 2)}</pre>
+                          <pre>
+                            {JSON.stringify(ep.sampleResponse, null, 2)}
+                          </pre>
                         </div>
                       </div>
                     </div>
@@ -656,7 +801,9 @@ export default function ApiDocsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-2">
               <Terminal className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-bold">Code Mẫu Tích Hợp (SDK / Code Snippet)</h2>
+              <h2 className="text-lg font-bold">
+                Code Mẫu Tích Hợp (SDK / Code Snippet)
+              </h2>
             </div>
             <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
               {(["curl", "php", "nodejs", "python"] as const).map((lang) => (
@@ -681,14 +828,24 @@ export default function ApiDocsPage() {
               type="button"
               className="absolute top-3 right-3 rounded-lg bg-neutral-800 px-2.5 py-1 text-[11px] text-neutral-200 hover:bg-neutral-700 flex items-center gap-1 font-sans"
               onClick={() => {
-                const code = getCodeSnippet(activeCodeLang, baseUrl, currentApiKey);
+                const code = getCodeSnippet(
+                  activeCodeLang,
+                  baseUrl,
+                  currentApiKey,
+                );
                 handleCopy(code, "code-snippet");
               }}
             >
-              {copiedField === "code-snippet" ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              {copiedField === "code-snippet" ? (
+                <Check className="h-3 w-3 text-emerald-400" />
+              ) : (
+                <Copy className="h-3 w-3" />
+              )}
               <span>Copy code</span>
             </button>
-            <pre className="pt-2">{getCodeSnippet(activeCodeLang, baseUrl, currentApiKey)}</pre>
+            <pre className="pt-2">
+              {getCodeSnippet(activeCodeLang, baseUrl, currentApiKey)}
+            </pre>
           </div>
         </div>
 
@@ -696,26 +853,38 @@ export default function ApiDocsPage() {
         <div className="mt-10 rounded-2xl border bg-card p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <Play className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-lg font-bold">Công cụ Kiểm tra API trực tiếp (Live API Tester)</h2>
+            <h2 className="text-lg font-bold">
+              Công cụ Kiểm tra API trực tiếp (Live API Tester)
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
             <div className="md:col-span-4 space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Chọn API cần thử:</label>
+              <label className="text-xs font-semibold text-muted-foreground">
+                Chọn API cần thử:
+              </label>
               <select
                 value={testEndpoint}
                 onChange={(e) => setTestEndpoint(e.target.value as any)}
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="profile">GET /api/profile.php (Thông tin ví & tài khoản)</option>
-                <option value="products">GET /api/products.php (Danh sách sản phẩm)</option>
-                <option value="product">GET /api/product.php (Chi tiết sản phẩm)</option>
+                <option value="profile">
+                  GET /api/profile.php (Thông tin ví & tài khoản)
+                </option>
+                <option value="products">
+                  GET /api/products.php (Danh sách sản phẩm)
+                </option>
+                <option value="product">
+                  GET /api/product.php (Chi tiết sản phẩm)
+                </option>
               </select>
             </div>
 
             {testEndpoint === "product" && (
               <div className="md:col-span-4 space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">ID sản phẩm:</label>
+                <label className="text-xs font-semibold text-muted-foreground">
+                  ID sản phẩm:
+                </label>
                 <input
                   type="text"
                   placeholder="Nhập ID sản phẩm..."
@@ -726,22 +895,30 @@ export default function ApiDocsPage() {
               </div>
             )}
 
-            <div className={`${testEndpoint === "product" ? "md:col-span-4" : "md:col-span-8"} flex gap-2`}>
+            <div
+              className={`${testEndpoint === "product" ? "md:col-span-4" : "md:col-span-8"} flex gap-2`}
+            >
               <Button
                 type="button"
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 flex items-center justify-center gap-2 shadow-sm"
                 onClick={runLiveTest}
                 disabled={testLoading}
               >
-                <Play className={`h-4 w-4 ${testLoading ? "animate-spin" : ""}`} />
-                <span>{testLoading ? "Đang gửi yêu cầu..." : "Gửi Test Thử Ngay"}</span>
+                <Play
+                  className={`h-4 w-4 ${testLoading ? "animate-spin" : ""}`}
+                />
+                <span>
+                  {testLoading ? "Đang gửi yêu cầu..." : "Gửi Test Thử Ngay"}
+                </span>
               </Button>
             </div>
           </div>
 
           {testResult && (
             <div className="mt-4 space-y-2">
-              <div className="text-xs font-bold text-muted-foreground uppercase">Kết quả trả về:</div>
+              <div className="text-xs font-bold text-muted-foreground uppercase">
+                Kết quả trả về:
+              </div>
               <div className="rounded-xl border bg-slate-950 p-4 font-mono text-xs text-emerald-400 overflow-x-auto max-h-[300px]">
                 <pre>{testResult}</pre>
               </div>
@@ -752,9 +929,12 @@ export default function ApiDocsPage() {
         {/* Support Footer Callout */}
         <div className="mt-10 rounded-2xl border bg-gradient-to-r from-blue-500/10 via-sky-500/10 to-indigo-500/10 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="space-y-1">
-            <h3 className="font-bold text-base">Cần hỗ trợ tích hợp hoặc kết nối kỹ thuật?</h3>
+            <h3 className="font-bold text-base">
+              Cần hỗ trợ tích hợp hoặc kết nối kỹ thuật?
+            </h3>
             <p className="text-xs text-muted-foreground">
-              Đội ngũ kỹ thuật hỗ trợ cài đặt mã nguồn kết nối, webhook và chiết khấu đại lý 24/7.
+              Đội ngũ kỹ thuật hỗ trợ cài đặt mã nguồn kết nối, webhook và chiết
+              khấu đại lý 24/7.
             </p>
           </div>
           <Link href="/wallet">
@@ -769,7 +949,11 @@ export default function ApiDocsPage() {
   );
 }
 
-function getCodeSnippet(lang: "curl" | "php" | "nodejs" | "python", baseUrl: string, apiKey: string) {
+function getCodeSnippet(
+  lang: "curl" | "php" | "nodejs" | "python",
+  baseUrl: string,
+  apiKey: string,
+) {
   if (lang === "curl") {
     return `# 1. Lấy thông tin tài khoản & số dư:
 curl -X GET "${baseUrl}/api/profile.php?api_key=${apiKey}"

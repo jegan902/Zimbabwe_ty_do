@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { createSession } from "@/lib/auth/session";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { hashPassword } from "@/lib/utils/crypto";
@@ -6,15 +5,11 @@ import { prisma } from "@/lib/utils/db";
 import { ConflictError, ValidationError } from "@/lib/utils/errors";
 import { createdResponse } from "@/lib/utils/response";
 import { apiRoute } from "@/lib/utils/route";
+import { getRequestMeta } from "@/lib/utils/request";
 import { registerSchema } from "@/lib/validation/auth";
 
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return (forwarded || request.headers.get("x-real-ip") || "unknown").slice(0, 128);
-}
-
 export const POST = apiRoute(async (request) => {
-  const ipAddress = clientIp(request);
+  const { ipAddress } = getRequestMeta(request);
   if (process.env.NODE_ENV !== "development") {
     await consumeRateLimit("auth-register", ipAddress, 10, 60 * 60);
   }
@@ -27,6 +22,12 @@ export const POST = apiRoute(async (request) => {
   }
 
   const input = registerSchema.parse(body);
+
+  if (process.env.NODE_ENV !== "development") {
+    // Per-address window keeps signup spam bounded even when the caller rotates IPs.
+    await consumeRateLimit("auth-register-account", input.email, 5, 60 * 60);
+  }
+
   const existing = await prisma.user.findUnique({
     where: { email: input.email },
     select: { id: true },
@@ -58,7 +59,14 @@ export const POST = apiRoute(async (request) => {
   });
 
   return createdResponse(
-    { user, wallet: { balance: "0.00", reservedBalance: "0.00", availableBalance: "0.00" } },
-    "Tạo tài khoản thành công"
+    {
+      user,
+      wallet: {
+        balance: "0.00",
+        reservedBalance: "0.00",
+        availableBalance: "0.00",
+      },
+    },
+    "Tạo tài khoản thành công",
   );
 });

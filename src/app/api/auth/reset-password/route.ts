@@ -6,14 +6,10 @@ import { hashPassword } from "@/lib/utils/crypto";
 import { ValidationError, AuthenticationError } from "@/lib/utils/errors";
 import { successResponse } from "@/lib/utils/response";
 import { apiRoute } from "@/lib/utils/route";
-
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return (forwarded || request.headers.get("x-real-ip") || "unknown").slice(0, 128);
-}
+import { getRequestMeta } from "@/lib/utils/request";
 
 export const POST = apiRoute(async (request: NextRequest) => {
-  const ip = clientIp(request);
+  const { ipAddress: ip } = getRequestMeta(request);
   await consumeRateLimit("auth-reset-password", ip, 5, 15 * 60);
 
   let body: unknown;
@@ -23,17 +19,20 @@ export const POST = apiRoute(async (request: NextRequest) => {
     throw new ValidationError("Body phải là JSON hợp lệ");
   }
 
-  const { email, otp, token, newPassword } = (body as {
-    email?: string;
-    otp?: string;
-    token?: string;
-    newPassword?: string;
-  }) || {};
+  const { email, otp, token, newPassword } =
+    (body as {
+      email?: string;
+      otp?: string;
+      token?: string;
+      newPassword?: string;
+    }) || {};
 
   const effectiveOtp = otp || token;
 
   if (!email || !effectiveOtp || !newPassword) {
-    throw new ValidationError("Vui lòng cung cấp đầy đủ email, mã OTP và mật khẩu mới");
+    throw new ValidationError(
+      "Vui lòng cung cấp đầy đủ email, mã OTP và mật khẩu mới",
+    );
   }
 
   if (newPassword.length < 6) {
@@ -41,15 +40,30 @@ export const POST = apiRoute(async (request: NextRequest) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+
+  // Per-account attempt window: distributing guesses over many IPs must not turn the
+  // 6-digit OTP into an oracle. 5 tries per 15 minutes is far below the 10^6 space.
+  await consumeRateLimit(
+    "auth-reset-password-account",
+    normalizedEmail,
+    5,
+    15 * 60,
+  );
+
   const user = await prisma.user.findUnique({
     where: { email: normalizedEmail },
   });
 
   if (!user || user.status === "DELETED") {
-    throw new AuthenticationError("Thông tin xác thực không hợp lệ hoặc tài khoản không tồn tại");
+    throw new AuthenticationError(
+      "Thông tin xác thực không hợp lệ hoặc tài khoản không tồn tại",
+    );
   }
 
-  const tokenHash = crypto.createHash("sha256").update(effectiveOtp.trim()).digest("hex");
+  const tokenHash = crypto
+    .createHash("sha256")
+    .update(effectiveOtp.trim())
+    .digest("hex");
 
   const validToken = await prisma.passwordResetToken.findFirst({
     where: {
@@ -62,7 +76,9 @@ export const POST = apiRoute(async (request: NextRequest) => {
   });
 
   if (!validToken) {
-    throw new AuthenticationError("Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại");
+    throw new AuthenticationError(
+      "Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại",
+    );
   }
 
   // Hash new password using Argon2id
@@ -91,6 +107,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
   ]);
 
   return successResponse({
-    message: "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay với mật khẩu mới.",
+    message:
+      "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay với mật khẩu mới.",
   });
 });

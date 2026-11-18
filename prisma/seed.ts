@@ -19,13 +19,13 @@ async function main() {
   // const quangVinhApiKey = process.env.SUPPLIER_QUANGVINH_API_KEY;
 
   const baseUrl =
-    process.env.SUPPLIER_SHOPFB2027_BASE_URL || "https://quangvinhmedia.store/api";
+    process.env.SUPPLIER_SHOPFB2027_BASE_URL ||
+    "https://quangvinhmedia.store/api";
   const quangVinhApiKey = process.env.SUPPLIER_SHOPFB2027_API_KEY;
-
 
   if (!quangVinhApiKey) {
     throw new Error(
-      "Missing SUPPLIER_QUANGVINH_API_KEY in .env — required to mirror supplier catalog"
+      "Missing SUPPLIER_QUANGVINH_API_KEY in .env — required to mirror supplier catalog",
     );
   }
 
@@ -93,27 +93,44 @@ async function main() {
   });
   console.log("Auto-sync enabled every 300s — run: npm run worker:sync");
 
-  // 2. Create Admin user if none exists
-  const adminEmail = "admin@digishop.com";
-  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
+  // 2. Create Admin user if none exists. Credentials come from the environment so a seeded
+  // database never ships with a well-known password; the fallback exists for local dev only.
+  const adminEmail = (process.env.ADMIN_EMAIL || "admin@digishop.com")
+    .trim()
+    .toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  const existingAdmin = await prisma.user.findUnique({
+    where: { email: adminEmail },
+  });
   if (!existingAdmin) {
-    const passwordHash = await hashPassword("Admin@123456");
-    const admin = await prisma.user.create({
-      data: {
-        email: adminEmail,
-        passwordHash,
-        role: "ADMIN",
-        status: "ACTIVE",
-        fullName: "Administrator",
-        wallet: {
-          create: {
-            balance: 1000000,
-            currency: "VND",
+    if (!adminPassword && process.env.NODE_ENV === "production") {
+      console.warn(
+        "ADMIN_PASSWORD is not set — skipping admin creation in production",
+      );
+    } else {
+      const passwordHash = await hashPassword(adminPassword || "Admin@123456");
+      const admin = await prisma.user.create({
+        data: {
+          email: adminEmail,
+          passwordHash,
+          role: "ADMIN",
+          status: "ACTIVE",
+          fullName: "Administrator",
+          wallet: {
+            create: {
+              balance: 1000000,
+              currency: "VND",
+            },
           },
         },
-      },
-    });
-    console.log("Admin account created:", admin.email, "(Password: Admin@123456)");
+      });
+      console.log("Admin account created:", admin.email);
+      if (!adminPassword) {
+        console.log(
+          "Using the development default password — set ADMIN_PASSWORD to override",
+        );
+      }
+    }
   }
 
   // 3. Initial full catalog mirror from supplier API → SupplierProduct + Product
@@ -133,9 +150,11 @@ async function main() {
   } catch (err) {
     console.warn(
       "Initial catalog mirror failed:",
-      err instanceof Error ? err.message : err
+      err instanceof Error ? err.message : err,
     );
-    console.warn("Supplier row is ready. Fix network/API key then run: npm run db:sync");
+    console.warn(
+      "Supplier row is ready. Fix network/API key then run: npm run db:sync",
+    );
   }
 }
 
@@ -148,4 +167,3 @@ main()
     console.error("Seed error:", err);
     process.exit(1);
   });
-

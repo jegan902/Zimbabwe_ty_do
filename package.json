@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "prisma migrate deploy",
+    "db:migrate-api-keys": "tsx --tsconfig tsconfig.json scripts/migrate-api-keys.ts",
     "db:seed": "tsx --tsconfig tsconfig.json prisma/seed.ts",
     "db:sync": "tsx --tsconfig tsconfig.json scripts/sync-suppliers.ts",
     "db:setup": "prisma migrate deploy && npm run db:seed",

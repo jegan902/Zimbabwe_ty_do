@@ -6,15 +6,11 @@ import { prisma } from "@/lib/utils/db";
 import { AuthenticationError, ValidationError } from "@/lib/utils/errors";
 import { successResponse } from "@/lib/utils/response";
 import { apiRoute } from "@/lib/utils/route";
+import { getRequestMeta } from "@/lib/utils/request";
 import { loginSchema } from "@/lib/validation/auth";
 
-function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return (forwarded || request.headers.get("x-real-ip") || "unknown").slice(0, 128);
-}
-
 export const POST = apiRoute(async (request: NextRequest) => {
-  const ip = clientIp(request);
+  const { ipAddress: ip } = getRequestMeta(request);
   await consumeRateLimit("auth-login", ip, 10, 15 * 60);
 
   let body: unknown;
@@ -26,6 +22,10 @@ export const POST = apiRoute(async (request: NextRequest) => {
 
   const input = loginSchema.parse(body);
 
+  // Per-account window: a spoofed X-Forwarded-For must not turn credential stuffing into
+  // an unlimited number of tries against the same email.
+  await consumeRateLimit("auth-login-account", input.email, 10, 15 * 60);
+
   const user = await prisma.user.findUnique({
     where: { email: input.email },
   });
@@ -34,11 +34,19 @@ export const POST = apiRoute(async (request: NextRequest) => {
     throw new AuthenticationError("Email hoặc mật khẩu không chính xác");
   }
 
-  if (user.status === "LOCKED" || (user.lockedUntil && user.lockedUntil > new Date())) {
-    throw new AuthenticationError("Tài khoản của bạn tạm thời bị khóa do nhiều lần đăng nhập sai. Vui lòng thử lại sau.");
+  if (
+    user.status === "LOCKED" ||
+    (user.lockedUntil && user.lockedUntil > new Date())
+  ) {
+    throw new AuthenticationError(
+      "Tài khoản của bạn tạm thời bị khóa do nhiều lần đăng nhập sai. Vui lòng thử lại sau.",
+    );
   }
 
-  const isValidPassword = await verifyPassword(input.password, user.passwordHash);
+  const isValidPassword = await verifyPassword(
+    input.password,
+    user.passwordHash,
+  );
 
   if (!isValidPassword) {
     const nextFailedCount = user.failedLoginCount + 1;
@@ -91,4 +99,3 @@ export const POST = apiRoute(async (request: NextRequest) => {
     },
   });
 });
-

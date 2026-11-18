@@ -3,7 +3,7 @@ export class AppError extends Error {
     public statusCode: number,
     public code: string,
     message: string,
-    public details?: unknown
+    public details?: unknown,
   ) {
     super(message);
     Object.setPrototypeOf(this, AppError.prototype);
@@ -38,6 +38,17 @@ export class NotFoundError extends AppError {
   }
 }
 
+export class PayloadTooLargeError extends AppError {
+  constructor(maxBytes: number) {
+    super(
+      413,
+      "PAYLOAD_TOO_LARGE",
+      `Dữ liệu gửi lên quá lớn (tối đa ${Math.floor(maxBytes / 1024)} KB)`,
+    );
+    Object.setPrototypeOf(this, PayloadTooLargeError.prototype);
+  }
+}
+
 export class ConflictError extends AppError {
   constructor(message: string, details?: unknown) {
     super(409, "CONFLICT", message, details);
@@ -60,12 +71,16 @@ export class InsufficientSupplierBalanceError extends AppError {
 }
 
 export class PriceChangedError extends AppError {
-  constructor(details: { oldPrice: string; newPrice: string; unitCost: string }) {
+  constructor(details: {
+    oldPrice: string;
+    newPrice: string;
+    unitCost: string;
+  }) {
     super(
       409,
       "PRICE_CHANGED",
       "Giá sản phẩm vừa thay đổi, vui lòng xác nhận giá mới",
-      details
+      details,
     );
     Object.setPrototypeOf(this, PriceChangedError.prototype);
   }
@@ -75,7 +90,7 @@ export class SupplierError extends AppError {
   constructor(
     message: string,
     code: string = "SUPPLIER_ERROR",
-    public raw?: unknown
+    public raw?: unknown,
   ) {
     super(502, code, message, raw);
     Object.setPrototypeOf(this, SupplierError.prototype);

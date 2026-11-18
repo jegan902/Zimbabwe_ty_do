@@ -6,6 +6,7 @@ import {
   ensureSupplierSyncSettings,
   scheduleNextSync,
 } from "@/lib/jobs/sync-settings";
+import { runSupplierBalanceAlertsThrottled } from "@/lib/services/notification.service";
 
 export {
   SYNC_INTERVAL_OPTIONS,
@@ -53,13 +54,19 @@ export async function runDueSupplierSyncs(): Promise<{
     try {
       const { acquired, result } = await withLock(lockName, 280, async () => {
         const outcome = await syncSupplierProducts(supplier.id, "SCHEDULED");
-        await scheduleNextSync(supplier.id, supplier.syncSettings?.syncInterval);
+        await scheduleNextSync(
+          supplier.id,
+          supplier.syncSettings?.syncInterval,
+        );
         return outcome;
       });
 
       if (!acquired) {
         skipped += 1;
-        logger.info({ supplierId: supplier.id }, "Auto-sync skipped: lock held");
+        logger.info(
+          { supplierId: supplier.id },
+          "Auto-sync skipped: lock held",
+        );
         continue;
       }
 
@@ -71,16 +78,21 @@ export async function runDueSupplierSyncs(): Promise<{
           status: result?.status,
           total: result?.totalProducts,
         },
-        "Auto-sync finished"
+        "Auto-sync finished",
       );
     } catch (err) {
       failed += 1;
-      await scheduleNextSync(supplier.id, supplier.syncSettings?.syncInterval).catch(
-        () => undefined
-      );
+      await scheduleNextSync(
+        supplier.id,
+        supplier.syncSettings?.syncInterval,
+      ).catch(() => undefined);
       logger.error({ err, supplierId: supplier.id }, "Auto-sync failed");
     }
   }
+
+  // Balance alerts run on their own 5-minute throttle and never surface an error,
+  // so a mail problem cannot make the catalog sync report a failure.
+  await runSupplierBalanceAlertsThrottled();
 
   return { checked: due.length, ran, skipped, failed };
 }
@@ -94,7 +106,7 @@ export function initInProcessSyncWorker(intervalMs = 30_000) {
   // Initial check after 3 seconds
   setTimeout(() => {
     runDueSupplierSyncs().catch((err) =>
-      logger.error({ err }, "Initial in-process supplier sync check failed")
+      logger.error({ err }, "Initial in-process supplier sync check failed"),
     );
   }, 3_000);
 
@@ -104,7 +116,7 @@ export function initInProcessSyncWorker(intervalMs = 30_000) {
       if (summary.ran > 0) {
         logger.info(
           { summary },
-          `[AutoSync] Completed auto-sync for ${summary.ran} due suppliers`
+          `[AutoSync] Completed auto-sync for ${summary.ran} due suppliers`,
         );
       }
     } catch (err) {
@@ -112,4 +124,3 @@ export function initInProcessSyncWorker(intervalMs = 30_000) {
     }
   }, intervalMs);
 }
-

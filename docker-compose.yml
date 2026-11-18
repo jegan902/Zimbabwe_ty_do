@@ -6,8 +6,10 @@ services:
       POSTGRES_USER: marketplace
       POSTGRES_PASSWORD: marketplace_dev_password
       POSTGRES_DB: marketplace
+    # Chỉ mở trên loopback: trước đây publish 5432 ra 0.0.0.0 nên bất kỳ máy nào
+    # trong cùng mạng LAN/VPS đều kết nối được bằng mật khẩu dev.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +21,9 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Redis không có mật khẩu, nên tuyệt đối không publish ra ngoài loopback.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:

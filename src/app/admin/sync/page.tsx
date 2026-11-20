@@ -20,6 +20,53 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import Link from "next/link";
 
+/** Human-readable gap between "now" and the next scheduled run. */
+function formatCountdown(target: string, now: number): { label: string; overdue: boolean } {
+  const diffMs = new Date(target).getTime() - now;
+  if (Number.isNaN(diffMs)) return { label: "", overdue: false };
+
+  if (diffMs <= 0) {
+    const lateSeconds = Math.floor(-diffMs / 1000);
+    return {
+      label:
+        lateSeconds < 60
+          ? `đang tới lượt (trễ ${lateSeconds}s)`
+          : `đang tới lượt (trễ ${Math.floor(lateSeconds / 60)} phút)`,
+      overdue: true,
+    };
+  }
+
+  const seconds = Math.round(diffMs / 1000);
+  if (seconds < 60) return { label: `còn ${seconds} giây`, overdue: false };
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    const rest = seconds % 60;
+    return { label: `còn ${minutes} phút${rest ? ` ${rest} giây` : ""}`, overdue: false };
+  }
+
+  return { label: `còn ${Math.floor(minutes / 60)} giờ ${minutes % 60} phút`, overdue: false };
+}
+
+/**
+ * Owns its own 1-second timer so only this label re-renders — the table below
+ * must not re-render every tick.
+ */
+function NextRunCountdown({ target }: { target: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const { label, overdue } = formatCountdown(target, now);
+  return (
+    <span className={`font-semibold ${overdue ? "text-amber-600" : "text-muted-foreground"}`}>
+      ({label})
+    </span>
+  );
+}
+
 export default function AdminSyncPage() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
@@ -114,6 +161,18 @@ export default function AdminSyncPage() {
     };
     return () => source.close();
   }, [fetchSuppliersAndLogs]);
+
+  // The worker writes a new `nextSyncAt` and a new log row when a scheduled run
+  // finishes. Nothing pushes that to the browser, so poll while the tab is open
+  // — otherwise the time and the table stay frozen until a manual reload.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      const supplierId = selectedSupplierIdRef.current;
+      if (supplierId) loadLogsAndSettings(supplierId);
+    }, 20_000);
+    return () => clearInterval(timer);
+  }, [loadLogsAndSettings]);
 
   // Sync Selected Supplier
   const handleSyncSelected = async () => {
@@ -290,11 +349,19 @@ export default function AdminSyncPage() {
               <h3 className="font-bold text-sm">Cấu hình tự động đồng bộ (Background Worker)</h3>
             </div>
             {syncSettings.nextSyncAt && (
-              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3 w-3" /> Lần chạy kế tiếp:{" "}
+              <span className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-1">
+                <Clock className="h-3 w-3" /> Lần chạy kế tiếp của{" "}
+                <span className="font-semibold text-foreground">{selectedSupplier?.name ?? "NCC đang chọn"}</span>
+                :{" "}
                 <span className="font-mono font-semibold text-foreground">
                   {new Date(syncSettings.nextSyncAt).toLocaleTimeString("vi-VN")}
                 </span>
+                <NextRunCountdown target={syncSettings.nextSyncAt} />
+              </span>
+            )}
+            {!syncSettings.isAutoSyncEnabled && (
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Clock className="h-3 w-3" /> {selectedSupplier?.name ?? "NCC đang chọn"} không có lịch tự chạy (đang tắt)
               </span>
             )}
           </div>
@@ -321,7 +388,12 @@ export default function AdminSyncPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="font-semibold text-muted-foreground block">Tần suất đồng bộ</label>
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-muted-foreground">Tần suất đồng bộ</label>
+                <span className="text-[10px] text-muted-foreground">
+                  Áp dụng cho {selectedSupplier?.name ?? "NCC đang chọn"}
+                </span>
+              </div>
               <select
                 value={syncSettings.syncInterval}
                 onChange={(e) =>
@@ -330,7 +402,7 @@ export default function AdminSyncPage() {
                 className="w-full h-9 rounded-lg border bg-background px-3 text-xs font-bold"
               >
                 <option value={60}>1 phút / lần (Thời gian thực)</option>
-                <option value={300}>5 phút / lần (Khuyến nghị)</option>
+                <option value={300}>5 phút / lần (Mặc định)</option>
                 <option value={900}>15 phút / lần</option>
                 <option value={1800}>30 phút / lần</option>
                 <option value={3600}>1 giờ / lần</option>
@@ -346,7 +418,7 @@ export default function AdminSyncPage() {
                 className="w-full h-9 text-xs font-bold"
               >
                 {savingSettings && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                Lưu cấu hình tần suất
+                Lưu cài đặt đồng bộ
               </Button>
             </div>
           </div>

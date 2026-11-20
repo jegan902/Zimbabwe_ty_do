@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { useAuth } from "@/components/auth/auth-context";
 import {
   LayoutDashboard,
@@ -16,9 +17,16 @@ import {
   CreditCard,
   ShieldCheck,
   ShieldAlert,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import {
+  ADMIN_SIDEBAR_COLLAPSED_COOKIE,
+  ADMIN_SIDEBAR_COOKIE_MAX_AGE,
+} from "@/lib/utils/constants";
 
 export interface AdminShellUser {
   fullName: string | null;
@@ -46,42 +54,111 @@ export function AdminShell({
   user,
   twoFactorEnabled,
   twoFactorRequired,
+  defaultCollapsed = false,
   children,
 }: {
   user: AdminShellUser;
   twoFactorEnabled: boolean;
   twoFactorRequired: boolean;
+  defaultCollapsed?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const { loading, logout } = useAuth();
   const needsEnrollment = twoFactorRequired && !twoFactorEnabled;
 
+  // Collapse only affects the desktop rail; on mobile the sidebar stays full width.
+  // The initial value comes from the server (cookie) so the first paint is already
+  // correct and no post-mount state sync is needed.
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      // Persist for the next full page load; the shell itself survives client navigation.
+      document.cookie = `${ADMIN_SIDEBAR_COLLAPSED_COOKIE}=${next ? "1" : "0"}; path=/admin; max-age=${ADMIN_SIDEBAR_COOKIE_MAX_AGE}; samesite=lax`;
+      return next;
+    });
+  };
+
+  const collapseLabel = collapsed
+    ? "Mở rộng thanh điều hướng"
+    : "Thu gọn thanh điều hướng";
+
   return (
     <div className="flex flex-col md:flex-row min-h-[calc(100vh-4rem)]">
       {/* Admin Sidebar */}
-      <aside className="w-full md:w-64 border-r bg-card/60 p-4 space-y-6 shrink-0 flex flex-col justify-between">
+      <aside
+        className={cn(
+          "w-full border-r bg-card/60 p-4 space-y-6 shrink-0 flex flex-col justify-between transition-[width,padding] duration-200",
+          collapsed ? "md:w-[76px] md:px-2" : "md:w-64",
+        )}
+      >
         <div className="space-y-6">
-          <div className="flex items-center justify-between border-b pb-3">
-            <div className="font-black text-sm text-primary flex items-center gap-1.5">
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2 border-b pb-3",
+              collapsed && "md:justify-center",
+            )}
+          >
+            <div
+              className={cn(
+                "font-black text-sm text-primary flex items-center gap-1.5",
+                collapsed && "md:hidden",
+              )}
+            >
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
               ADMIN PORTAL
             </div>
-            <Link
-              href="/"
-              className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <ArrowLeft className="h-3 w-3" /> Về Web
-            </Link>
+            <div className="flex items-center gap-1">
+              <Link
+                href="/"
+                title="Về Web"
+                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                <span className={cn(collapsed && "md:hidden")}>Về Web</span>
+              </Link>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={toggleCollapsed}
+                title={collapseLabel}
+                aria-label={collapseLabel}
+                aria-expanded={!collapsed}
+                aria-controls="admin-sidebar-nav"
+                className="hidden md:inline-flex text-muted-foreground hover:text-foreground"
+              >
+                {collapsed ? (
+                  <PanelLeftOpen className="h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
 
           {/* Logged in Admin Profile Card */}
-          <div className="rounded-xl border bg-muted/30 p-3 space-y-2">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-black text-xs">
+          <div
+            className={cn(
+              "rounded-xl border bg-muted/30 p-3 space-y-2",
+              collapsed && "md:p-2",
+            )}
+          >
+            <div
+              className={cn(
+                "flex items-center gap-2.5",
+                collapsed && "md:justify-center",
+              )}
+            >
+              <div
+                className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-black text-xs"
+                title={user.fullName || "Administrator"}
+              >
                 AD
               </div>
-              <div className="min-w-0 flex-1">
+              <div className={cn("min-w-0 flex-1", collapsed && "md:hidden")}>
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-xs truncate">
                     {user.fullName || "Administrator"}
@@ -100,7 +177,7 @@ export function AdminShell({
             </div>
           </div>
 
-          <nav className="space-y-1">
+          <nav id="admin-sidebar-nav" className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href;
@@ -108,14 +185,20 @@ export function AdminShell({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  title={item.label}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all",
+                    collapsed && "md:justify-center md:px-0",
                     active
                       ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
                 >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className={cn("truncate", collapsed && "md:hidden")}>
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
@@ -129,14 +212,20 @@ export function AdminShell({
             size="sm"
             onClick={logout}
             disabled={loading}
-            className="w-full text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 justify-start gap-2 h-9"
+            title="Đăng xuất Admin"
+            className={cn(
+              "w-full text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 justify-start gap-2 h-9",
+              collapsed && "md:justify-center md:px-0",
+            )}
           >
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <LogOut className="h-3.5 w-3.5" />
             )}
-            Đăng xuất Admin
+            <span className={cn(collapsed && "md:hidden")}>
+              Đăng xuất Admin
+            </span>
           </Button>
         </div>
       </aside>
@@ -147,10 +236,13 @@ export function AdminShell({
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
             <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
             <div className="text-xs space-y-1">
-              <p className="font-bold">Tài khoản quản trị chưa bật xác thực hai lớp (2FA)</p>
+              <p className="font-bold">
+                Tài khoản quản trị chưa bật xác thực hai lớp (2FA)
+              </p>
               <p>
-                Mọi thao tác quản trị đang bị chặn để bảo vệ shop. Hãy bật 2FA bằng ứng dụng
-                Google Authenticator / Authy — chỉ mất khoảng 1 phút.{" "}
+                Mọi thao tác quản trị đang bị chặn để bảo vệ shop. Hãy bật 2FA
+                bằng ứng dụng Google Authenticator / Authy — chỉ mất khoảng 1
+                phút.{" "}
                 <Link href="/admin/security" className="font-bold underline">
                   Bật ngay
                 </Link>

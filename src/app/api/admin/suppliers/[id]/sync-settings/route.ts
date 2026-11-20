@@ -4,7 +4,10 @@ import { prisma } from "@/lib/utils/db";
 import { successResponse } from "@/lib/utils/response";
 import { apiRouteWithParams } from "@/lib/utils/route";
 import { NotFoundError, ValidationError } from "@/lib/utils/errors";
-import { normalizeSyncInterval, scheduleNextSync } from "@/lib/jobs/sync-settings";
+import {
+  DEFAULT_SYNC_INTERVAL,
+  normalizeSyncInterval,
+} from "@/lib/jobs/sync-settings";
 
 export const GET = apiRouteWithParams<{ id: string }>(async (request: NextRequest, { params }) => {
   await requireApiAdmin(request);
@@ -43,9 +46,35 @@ export const PUT = apiRouteWithParams<{ id: string }>(async (request: NextReques
   const supplier = await prisma.supplier.findUnique({ where: { id } });
   if (!supplier) throw new NotFoundError("Không tìm thấy nhà cung cấp");
 
-  const interval = syncInterval !== undefined ? normalizeSyncInterval(syncInterval) : 300;
-  const autoSync = isAutoSyncEnabled !== undefined ? Boolean(isAutoSyncEnabled) : true;
-  const nextSyncAt = autoSync ? new Date(Date.now() + interval * 1000) : null;
+  // Fields the caller omits keep their stored value instead of snapping back to
+  // the default: toggling auto-sync alone must not reset a 15-minute schedule.
+  const existing = await prisma.supplierSyncSettings.findUnique({
+    where: { supplierId: id },
+  });
+
+  const interval =
+    syncInterval !== undefined
+      ? normalizeSyncInterval(syncInterval)
+      : (existing?.syncInterval ?? DEFAULT_SYNC_INTERVAL);
+  const autoSync =
+    isAutoSyncEnabled !== undefined
+      ? Boolean(isAutoSyncEnabled)
+      : (existing?.isAutoSyncEnabled ?? true);
+
+  // Only restart the countdown when something actually changed. Pressing "Lưu"
+  // twice would otherwise keep pushing the next run forward, which makes a
+  // 5-minute schedule look like it never fires.
+  const intervalChanged = interval !== existing?.syncInterval;
+  const autoSyncChanged = autoSync !== existing?.isAutoSyncEnabled;
+
+  let nextSyncAt: Date | null = null;
+  if (autoSync) {
+    const keepSchedule =
+      !!existing && !intervalChanged && !autoSyncChanged && !!existing.nextSyncAt;
+    nextSyncAt = keepSchedule
+      ? existing.nextSyncAt
+      : new Date(Date.now() + interval * 1000);
+  }
 
   const updated = await prisma.supplierSyncSettings.upsert({
     where: { supplierId: id },
